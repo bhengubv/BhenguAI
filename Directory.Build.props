@@ -1,79 +1,31 @@
 <Project>
   <PropertyGroup>
-    <!-- ========== CORE IDENTIFICATION ========== -->
-    <PackageId>Bhengu.AI.Core</PackageId>
-    <Version>1.1.0</Version> <!-- Updated version -->
+    <!-- ========== CORE METADATA ========== -->
+    <Version>1.1.0</Version>
     <Authors>Thamsanqa Bengu; Bhengu B.V.</Authors>
     <Company>Bhengu B.V.</Company>
+    <Description>Enterprise-grade AI model management with Hugging Face integration</Description>
     
-    <!-- ========== ENHANCED METADATA ========== -->
-    <Title>Bhengu AI Core Library</Title> <!-- More descriptive -->
-    <Summary>Enterprise-grade AI model management with Hugging Face integration</Summary>
-    <Description>
-      Robust .NET library for managing AI models throughout their lifecycle. Features include:
-      - Secure model downloading with checksum verification
-      - Automatic version control and updates
-      - Progress reporting with ETA and speed tracking
-      - First-class support for Phi-3, LLaMA, and other transformer models
-      - Enterprise-ready security and compliance
-
-      Supports .NET 8+ with optimized performance for cloud deployments.
-    </Description>
-    
-    <!-- ========== COMPLIANCE & SECURITY ========== -->
+    <!-- ========== ESSENTIAL CONFIGURATION ========== -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Copyright>Copyright © 2025 Bhengu B.V. All rights reserved.</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <PackageValidationBaselineVersion>1.0.0</PackageValidationBaselineVersion>
-    <EnablePackageValidation>true</EnablePackageValidation>
-    
-    <!-- ========== REPOSITORY & DOCS ========== -->
-    <RepositoryUrl>https://github.com/bhengubv/Bhengu.AI.Core.git</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>https://github.com/bhengubv/Bhengu.AI.Core/releases/tag/v$(Version)</PackageReleaseNotes>
-    <PackageProjectUrl>https://bhengu.ai/products/core</PackageProjectUrl>
-    
-    <!-- ========== QUALITY & SUPPORT ========== -->
-    <PackageTags>AI ML HuggingFace Phi-3 ONNX Embeddings ModelManagement Enterprise</PackageTags>
-    <DevelopmentDependency>false</DevelopmentDependency>
-    <SupportUrl>https://github.com/bhengubv/Bhengu.AI.Core/issues</SupportUrl>
-    <PackageAnalysis>
-      <AnalysisMode>AllEnabledByDefault</AnalysisMode>
-    </PackageAnalysis>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     
     <!-- ========== BUILD OPTIMIZATIONS ========== -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    
-    <!-- ========== SECURITY HARDENING ========== -->
-    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
-    <EnableAotAnalyzer>true</EnableAotAnalyzer>
-    <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- ========== INCLUDED FILES ========== -->
     <None Include="$(MSBuildThisFileDirectory)../assets/icon.png" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="\" />
-    <None Include="$(MSBuildThisFileDirectory)../LICENSE.md" Pack="true" PackagePath="\" />
     
-    <!-- ========== BUILD DEPENDENCIES ========== -->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="8.0.0" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.Packaging.Tools.Trimming" Version="8.0.0" PrivateAssets="All" />
+    <!-- ========== PACKAGE REFERENCES ========== -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="All"/>
   </ItemGroup>
-
-  <!-- ========== VERSION VALIDATION ========== -->
-  <Target Name="ValidatePackageVersion" BeforeTargets="Pack">
-    <Error Text="Version must follow SemVer format (e.g. 1.0.0 or 2.1.0-preview1)"
-           Condition="$(Version) == '' OR !$(Version.Contains('.'))" />
-  </Target>
 </Project>
