@@ -9,6 +9,7 @@
     <!-- ========== ESSENTIAL CONFIGURATION ========== -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <RepositoryUrl>https://github.com/bhengubv/Bhengu.AI</RepositoryUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     
@@ -17,15 +18,30 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Deterministic>true</Deterministic>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
+
+    <!-- ========== PATH RESOLUTION FIXES ========== -->
+    <PackageIconFullPath>$(MSBuildThisFileDirectory)assets\icon.png</PackageIconFullPath>
+    <PackageReadmeFullPath>$(MSBuildThisFileDirectory)README.md</PackageReadmeFullPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ========== INCLUDED FILES ========== -->
-    <None Include="$(MSBuildThisFileDirectory)../assets/icon.png" Pack="true" PackagePath="\" />
-    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="\" />
+    <!-- ========== INCLUDED FILES (FIXED PATHS) ========== -->
+    <None Include="$(PackageIconFullPath)" Pack="true" PackagePath="\" Condition="Exists('$(PackageIconFullPath)')">
+      <Visible>false</Visible>
+    </None>
+    <None Include="$(PackageReadmeFullPath)" Pack="true" PackagePath="\" Condition="Exists('$(PackageReadmeFullPath)')">
+      <Visible>false</Visible>
+    </None>
     
     <!-- ========== PACKAGE REFERENCES ========== -->
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
     <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="All"/>
   </ItemGroup>
+
+  <Target Name="ValidatePackageAssets" BeforeTargets="Pack">
+    <Error Text="Required package icon not found at $(PackageIconFullPath)" 
+           Condition="!Exists('$(PackageIconFullPath)')"/>
+    <Error Text="Required README not found at $(PackageReadmeFullPath)" 
+           Condition="!Exists('$(PackageReadmeFullPath)')"/>
+  </Target>
 </Project>
