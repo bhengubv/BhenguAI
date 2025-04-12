@@ -1,0 +1,52 @@
+<Project>
+  <PropertyGroup>
+    <!-- Required metadata -->
+    <PackageId>Bhengu.AI.Core</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Thmsanqa Bengu; Bhengu B.V.</Authors>
+    <Company>Bhengu B.V.</Company>
+    
+    <!-- Extended Metadata -->
+    <Title>Bhengu.AI.Core</Title>
+    <Summary>Professional-grade AI model management for .NET applications</Summary>
+    <Description>
+      Comprehensive solution for downloading, caching, and running Hugging Face models.
+      Features include automatic updates, checksum verification, and progress reporting.
+      First-class support for Phi-3-mini and other transformer models.
+    </Description>
+    
+    <!-- Compliance -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright © 2025 Bhengu B.V.</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    
+    <!-- Repository Info -->
+    <RepositoryUrl>https://github.com/bhengubv/Bhengu.AI.Core.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    
+    <!-- Documentation -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>https://github.com/bhengubv/Bhengu.AI.Core/releases</PackageReleaseNotes>
+    
+    <!-- Quality -->
+    <PackageTags>AI ML HuggingFace Phi-3 ONNX Embeddings</PackageTags>
+    <DevelopmentDependency>false</DevelopmentDependency>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    
+    <!-- Build -->
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Include files -->
+    <None Include="$(MSBuildThisFileDirectory)../assets/icon.png" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="\" />
+    
+    <!-- SourceLink support -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+	  <Compile Remove="SearchExtensions.cs" />
+	  <Compile Remove="SemanticSearchModule.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="sqlite-net-pcl" Version="1.8.116" />
+		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.0" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<!-- If not using SQLite -->
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+</Project>

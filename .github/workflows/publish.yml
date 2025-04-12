@@ -1,0 +1,50 @@
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags (v1.0.0, etc.)
+
+env:
+  NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+  SIGNING_CERT: ${{ secrets.CODE_SIGNING_CERT }}
+  SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_PASSWORD }}
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    # Setup .NET
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '9.0.x'
+        
+    # Add authenticode certificate
+    - name: Install signing certificate
+      if: env.SIGNING_CERT != ''
+      run: |
+        $tempFile = [System.IO.Path]::GetTempFileName()
+        [System.IO.File]::WriteAllBytes($tempFile, [System.Convert]::FromBase64String("$env:SIGNING_CERT"))
+        Export-PfxCertificate -FilePath $tempFile -Cert cert:\CurrentUser\My -Password (ConvertTo-SecureString -String "$env:SIGNING_PASSWORD" -AsPlainText -Force)
+        
+    # Build and pack
+    - name: Build and pack
+      run: |
+        cd src/Bhengu.AI.Core
+        dotnet pack --configuration Release -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+        
+    # Sign the package
+    - name: Sign package
+      if: env.SIGNING_CERT != ''
+      run: |
+        $package = Get-ChildItem src/Bhengu.AI.Core/bin/Release/*.nupkg | Select-Object -First 1
+        nuget sign $package -CertificatePath cert:\CurrentUser\My -Timestamper http://timestamp.digicert.com
+        
+    # Publish to NuGet
+    - name: Push to NuGet
+      run: |
+        $package = Get-ChildItem src/Bhengu.AI.Core/bin/Release/*.nupkg | Select-Object -First 1
+        dotnet nuget push $package -k $env:NUGET_API_KEY -s https://api.nuget.org/v3/index.json --skip-duplicate

@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+	  <Compile Remove="BhenguEngineExtensions.cs" />
+	  <Compile Remove="EmbeddingExtensions.cs" />
+	  <Compile Remove="MiniLMEmbeddingService.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.16.0" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<!-- If not using SQLite -->
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+</Project>

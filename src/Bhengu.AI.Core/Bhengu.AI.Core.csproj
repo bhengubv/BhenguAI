@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+	<ItemGroup>
+	  <Compile Remove="BhenguEngine.cs" />
+	  <Compile Remove="IBhenguModule.cs" />
+	  <Compile Remove="IEmbeddingService.cs" />
+	  <Compile Remove="IModelLoader.cs" />
+	  <Compile Remove="LocalModelLoader.cs" />
+	  <Compile Remove="ModelRegistryService.cs" />
+	</ItemGroup>
+	<ItemGroup>
+	  <None Remove="registry.json" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.0" />
+		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.16.0" />
+		<PackageReference Include="System.Net.Http" Version="4.3.4" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<!-- If not using SQLite -->
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+</Project>
