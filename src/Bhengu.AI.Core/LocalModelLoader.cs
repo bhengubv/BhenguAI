@@ -38,7 +38,14 @@ namespace Bhengu.AI.Core
 
             if (File.Exists(localPath))
             {
-                if (modelInfo.Checksum.StartsWith("sha256:TBD") || VerifyChecksum(localPath, modelInfo.Checksum))
+                if (modelInfo.Checksum.StartsWith("sha256:TBD"))
+                {
+                    Trace.TraceWarning(
+                        "BhenguAI: Model '{0}' has no verified checksum (sha256:TBD) — integrity check skipped. Update registry.json before production use.",
+                        modelInfo.FileName);
+                    return localPath;
+                }
+                if (VerifyChecksum(localPath, modelInfo.Checksum))
                     return localPath;
                 File.Delete(localPath);
             }
@@ -52,7 +59,14 @@ namespace Bhengu.AI.Core
                 try
                 {
                     await DownloadFileAsync(url, localPath, progress ?? new Progress<float>());
-                    if (modelInfo.Checksum.StartsWith("sha256:TBD") || VerifyChecksum(localPath, modelInfo.Checksum))
+                    if (modelInfo.Checksum.StartsWith("sha256:TBD"))
+                    {
+                        Trace.TraceWarning(
+                            "BhenguAI: Model '{0}' downloaded but has no verified checksum (sha256:TBD) — integrity check skipped. Update registry.json before production use.",
+                            modelInfo.FileName);
+                        return localPath;
+                    }
+                    if (VerifyChecksum(localPath, modelInfo.Checksum))
                         return localPath;
                     File.Delete(localPath);
                     lastError = new InvalidDataException("Downloaded model failed checksum verification.");

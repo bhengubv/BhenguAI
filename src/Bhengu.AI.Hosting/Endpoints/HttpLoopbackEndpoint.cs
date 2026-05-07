@@ -122,15 +122,15 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
         if (!_started) return;
         _started = false;
 
-        try { _serverCts?.Cancel(); } catch { /* already disposed */ }
+        try { _serverCts?.Cancel(); } catch (ObjectDisposedException) { /* CTS already disposed — nothing to do */ }
 
         try
         {
             _listener?.Stop();
         }
-        catch
+        catch (Exception ex)
         {
-            // Listener may already be closed.
+            _logger.LogDebug(ex, "Butler loopback: listener already closed during StopAsync.");
         }
 
         if (_acceptLoop is not null)
@@ -143,9 +143,9 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
             {
                 // Caller-supplied cancellation; not fatal.
             }
-            catch
+            catch (Exception ex)
             {
-                // Already-faulted accept loop.
+                _logger.LogDebug(ex, "Butler loopback: accept loop faulted on shutdown.");
             }
         }
 
@@ -166,9 +166,10 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // DisposeAsync must not throw.
+            // DisposeAsync must not throw — swallow but log at debug level.
+            _logger.LogDebug(ex, "Butler loopback: StopAsync threw during DisposeAsync.");
         }
     }
 
@@ -206,7 +207,8 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
                 continue;
             }
 
-            // Fire-and-forget per-connection task.
+            // Fire-and-forget: each request runs on its own Task so the accept loop is not blocked.
+            // HandleRequestAsync is fully exception-guarded — unhandled throws cannot escape it.
             _ = Task.Run(() => HandleRequestAsync(context, ct), ct);
         }
     }
@@ -259,9 +261,9 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
             {
                 await WritePlainAsync(context, 500, "internal error").ConfigureAwait(false);
             }
-            catch
+            catch (Exception writeEx)
             {
-                // Client disconnected — nothing we can do.
+                _logger.LogDebug(writeEx, "Butler loopback: could not send 500 response — client likely disconnected.");
             }
         }
     }
@@ -353,7 +355,8 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
         }
         finally
         {
-            try { context.Response.OutputStream.Close(); } catch { /* client disconnected */ }
+            try { context.Response.OutputStream.Close(); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Butler loopback: stream output already closed."); }
         }
     }
 

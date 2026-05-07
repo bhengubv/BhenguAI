@@ -1,4 +1,4 @@
-﻿using System.Security;
+using System.Security;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -8,11 +8,11 @@ namespace Bhengu.AI.Core.Models
     {
         private readonly HttpClient _httpClient;
         private readonly string _registryPath;
-        private ModelRegistry _embeddedRegistry;
-        private ModelRegistry _remoteRegistry;
+        private ModelRegistry? _embeddedRegistry;
+        private ModelRegistry? _remoteRegistry;
         private bool _disposed;
 
-        public ModelRegistryService(string registryUrl = null)
+        public ModelRegistryService(string? registryUrl = null)
         {
             _httpClient = new HttpClient();
             _registryPath = Path.Combine(
@@ -21,17 +21,27 @@ namespace Bhengu.AI.Core.Models
                 "Models",
                 "remote_registry.json");
 
-            // Load embedded registry (fallback)
+            // Load embedded registry (fallback). Stream may be null if the resource is not embedded.
             var assembly = typeof(ModelRegistryService).Assembly;
             using var stream = assembly.GetManifestResourceStream("Bhengu.AI.Core.Models.embedded_registry.json");
-            _embeddedRegistry = JsonSerializer.Deserialize<ModelRegistry>(stream);
+            if (stream is not null)
+            {
+                _embeddedRegistry = JsonSerializer.Deserialize<ModelRegistry>(stream);
+            }
         }
 
         public async Task CheckForUpdatesAsync()
         {
             try
             {
-                var response = await _httpClient.GetAsync(_embeddedRegistry.RegistryUrl);
+                var registryUrl = _embeddedRegistry?.RegistryUrl;
+                if (string.IsNullOrWhiteSpace(registryUrl))
+                {
+                    _remoteRegistry = _embeddedRegistry;
+                    return;
+                }
+
+                var response = await _httpClient.GetAsync(registryUrl);
                 response.EnsureSuccessStatusCode();
 
                 var remoteJson = await response.Content.ReadAsStringAsync();
@@ -48,16 +58,16 @@ namespace Bhengu.AI.Core.Models
             }
         }
 
-        public ModelEntry GetLatestModel(string modelName)
+        public ModelEntry? GetLatestModel(string modelName)
         {
             var registry = _remoteRegistry ?? _embeddedRegistry;
-            return registry.Models.FirstOrDefault(m => m.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase));
+            return registry?.Models.FirstOrDefault(m => m.Name.Equals(modelName, StringComparison.OrdinalIgnoreCase));
         }
 
-        private bool VerifySignature(string json)
+        private static bool VerifySignature(string json)
         {
-            // Implement ECDSA/PGP verification here
-            return true; // Simplified for example
+            // TODO: Implement ECDSA/PGP verification before enabling remote registry updates.
+            return true;
         }
 
         public void Dispose()

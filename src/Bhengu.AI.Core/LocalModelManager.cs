@@ -69,7 +69,8 @@ namespace Bhengu.AI.Core
                 var actualChecksum = await ComputeFileChecksumAsync(Path.Combine(modelPath, "pytorch_model.bin"));
                 if (!actualChecksum.SequenceEqual(expectedChecksum))
                 {
-                    throw new Exception("Model checksum verification failed");
+                    throw new InvalidDataException(
+                        $"Model checksum verification failed for '{modelId}'. The file may be corrupt or tampered with.");
                 }
             }
 

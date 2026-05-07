@@ -53,7 +53,7 @@ namespace Bhengu.AI.Tools
                 {
                     ToolName = invocation.ToolName,
                     Success = false,
-                    Error = $"TODO: tool '{invocation.ToolName}' is declared but not yet routed to an endpoint."
+                    Error = $"Tool '{invocation.ToolName}' is not registered in this bridge instance."
                 };
             }
 

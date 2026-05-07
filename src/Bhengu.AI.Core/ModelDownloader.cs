@@ -124,7 +124,8 @@ namespace Bhengu.AI.Core
                 var source = MatchSource(url);
                 if (source is null)
                 {
-                    failures.Add($"(no source registered for url '{url}')");
+                    Console.WriteLine($"[ModelDownloader] Warning: no registered source matched URL '{url}' — skipping. Add a source whose Name matches the hostname, or extend MatchSource.");
+                    failures.Add($"(no registered source for '{url}')");
                     continue;
                 }
 

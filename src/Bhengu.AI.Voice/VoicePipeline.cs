@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Bhengu.AI.Voice;
@@ -167,6 +168,12 @@ public sealed class VoicePipeline : IAsyncDisposable
             if (result is not null)
             {
                 Transcribed?.Invoke(this, new TranscribedEventArgs { Result = result });
+            }
+            else
+            {
+                // Transcriber stream yielded no final result — silence, noise, or premature cancel.
+                // This is normal; no event is raised.
+                Trace.TraceInformation("VoicePipeline: activation produced no final transcription (silent or empty audio).");
             }
         }
         catch (OperationCanceledException)
