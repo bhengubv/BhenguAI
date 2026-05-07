@@ -1,53 +1,40 @@
-﻿using Bhengu.AI.Core;
+using Bhengu.AI.Core;
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Bhengu.AI.Embeddings
 {
+    /// <summary>
+    /// Placeholder embedder. The previous implementation depended on a US-origin embedding model
+    /// (MiniLM via ONNX Runtime). Pending replacement with a sovereign-origin embedder
+    /// (e.g. BGE-zh, Qwen-Embedding, or similar Chinese-origin model). See TODO.md.
+    /// </summary>
     public sealed class TextEmbedder : IDisposable
     {
         private readonly IModelManager _modelManager;
         private readonly byte[] _expectedChecksum;
-        private SafeModelHandle? _model;
-        private readonly object _modelLock = new();
+        private bool _disposed;
 
-        // Fixed constructor
         public TextEmbedder(IModelManager modelManager, byte[] expectedChecksum)
         {
             _modelManager = modelManager ?? throw new ArgumentNullException(nameof(modelManager));
             _expectedChecksum = expectedChecksum ?? throw new ArgumentNullException(nameof(expectedChecksum));
         }
 
-        public async Task<float[]> GenerateAsync(string text, CancellationToken ct = default)
+        public Task<float[]> GenerateAsync(string text, CancellationToken ct = default)
         {
-            ct.ThrowIfCancellationRequested();
-
+            if (_disposed) throw new ObjectDisposedException(nameof(TextEmbedder));
             if (string.IsNullOrWhiteSpace(text))
                 throw new ArgumentException("Text cannot be empty", nameof(text));
 
-            var path = await _modelManager.GetModelPathAsync("miniLM", ct).ConfigureAwait(false);
-            await LoadModelAsync(path, ct).ConfigureAwait(false);
-
-            return PlatformInterop.GenerateEmbedding(_model!, text); // Safe after LoadModel
-        }
-
-        private async Task LoadModelAsync(string path, CancellationToken ct)
-        {
-            if (!await _modelManager.VerifyModelAsync(path, _expectedChecksum, ct).ConfigureAwait(false))
-                throw new InvalidDataException("Model checksum verification failed");
-
-            lock (_modelLock)
-            {
-                _model?.Dispose();
-                _model = PlatformInterop.LoadModel(path);
-            }
+            throw new NotImplementedException(
+                "Embeddings backend not yet wired. Pending sovereign-origin embedding model. See TODO.md.");
         }
 
         public void Dispose()
         {
-            _model?.Dispose();
+            _disposed = true;
             GC.SuppressFinalize(this);
         }
     }

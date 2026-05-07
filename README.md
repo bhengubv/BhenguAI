@@ -1,67 +1,25 @@
-# Bhengu.AI.Core
+# BhenguAI
 
-![NuGet Version](https://img.shields.io/nuget/v/Bhengu.AI.Core?color=blue) ![License](https://img.shields.io/github/license/yourusername/Bhengu.AI)
+On-device AI library for the TheGeekNetwork ecosystem. Internal codename: Butler / B!.
 
-Professional AI model management for .NET applications, with first-class support for Hugging Face models like Microsoft's Phi-3-mini.
+Runs Qwen 3 14B (Alibaba, MIT licensed) locally via llama.cpp. Designed to fit on a Xiaomi 12 Pro: under 15 GB on disk, under 4 GB RAM in use, fully offline.
 
-## Features
+## Why local?
+- Sovereignty: no dependency on US or EU clouds.
+- Privacy: nothing leaves the device.
+- Resilience: works under sanctions, blackouts, or roaming.
+- Cost: zero per-token charges.
 
-✅ **Smart Model Downloading**
-- Resume interrupted downloads
-- Checksum verification
-- Update detection
+## Components
+- **Bhengu.AI.Core** — model registry, downloader (ModelScope primary, HuggingFace fallback), local cache.
+- **Bhengu.AI.Inference** — llama.cpp P/Invoke layer. Qwen chat generator.
+- **Bhengu.AI.Embeddings** — local embeddings for semantic search.
+- **Bhengu.AI.Search** — vector search over local data.
+- **Bhengu.AI.Tools** — function-calling bridge to the 36 TheGeekNetwork APIs.
 
-🚀 **Performance**
-- Multi-threaded downloads
-- Sharded model support
-- Progress reporting
+## Quick start
 
-🔒 **Security**
-- Authentication support
-- File validation
-- Secure HTTPS transfers
+See `SETUP.md` for native binary acquisition. See `TODO.md` for what's not yet done.
 
-## Installation
-
-```bash
-dotnet add package Bhengu.AI.Core
-```
-
-## Quick Start
-
-```csharp
-using Bhengu.AI.Core;
-using Bhengu.AI.Embeddings;
-
-// 1. Initialize downloader (add your HF token if needed)
-using var downloader = new HuggingFaceModelDownloader();
-
-// 2. Download Phi-3-mini (automatically caches)
-await downloader.DownloadModelAsync(
-    "microsoft/Phi-3-mini-128k-instruct",
-    "./ai_models"
-);
-
-// 3. Use the model
-using var embedder = new Phi3MiniTextEmbedder("./ai_models/microsoft_Phi-3-mini-128k-instruct");
-var embedding = await embedder.GenerateAsync("Hello world");
-```
-
-## Configuration
-
-Set these optional environment variables:
-
-| Variable       | Purpose                          |
-|----------------|----------------------------------|
-| `HF_TOKEN`     | Hugging Face API token           |
-| `HF_CACHE_DIR` | Custom model cache location      |
-| `HF_TIMEOUT`   | Download timeout in minutes      |
-
-## Documentation
-
-Full API reference available at:  
-[https://github.com/bhengubv/Bhengu.AI/docs](https://github.com/bhengubv/Bhengu.AI/docs)
-
-## License
-
-MIT License - Free for commercial and personal use.
+## Status
+Foundational build around Qwen 3 14B. Native llama.cpp binaries to be added per platform. PowerInfer-2 expert streaming integration to follow.
