@@ -10,9 +10,16 @@
 //     QwenTextGenerator allocates a fresh inference context per call.
 //   - DisposeAsync cancels in-flight stream calls via the linked CTS held in
 //     _shutdownCts.
+//
+// Observer model:
+//   - IButlerObserver is called at key lifecycle and inference events.
+//   - Observer exceptions are caught and logged; they never break the caller.
+//   - All observer calls are fire-and-forget-with-error-isolation via
+//     FireObserverAsync, keeping the hot paths clean.
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -120,6 +127,8 @@ public sealed class ButlerService : IButlerService
 
             _started = true;
             _logger.LogInformation("Butler service ready.");
+
+            await FireObserverAsync(o => o.OnStartedAsync(ct), ct).ConfigureAwait(false);
         }
         finally
         {
@@ -148,6 +157,9 @@ public sealed class ButlerService : IButlerService
             _generator = null;
             _started = false;
             _logger.LogInformation("Butler service stopped.");
+
+            await FireObserverAsync(o => o.OnStoppedAsync(CancellationToken.None),
+                CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
@@ -183,7 +195,18 @@ public sealed class ButlerService : IButlerService
         var effectiveOptions = options ?? _options.DefaultGenerationOptions;
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
-        return await generator.GenerateAsync(prepared, effectiveOptions, linked.Token).ConfigureAwait(false);
+
+        var correlationId = Guid.NewGuid();
+        var sw = Stopwatch.StartNew();
+        var response = await generator.GenerateAsync(prepared, effectiveOptions, linked.Token)
+            .ConfigureAwait(false);
+        sw.Stop();
+
+        await FireObserverAsync(o => o.OnChatCompletedAsync(
+            new ButlerChatEvent(correlationId, prepared, response, sw.Elapsed, DateTimeOffset.UtcNow),
+            ct), ct).ConfigureAwait(false);
+
+        return response;
     }
 
     /// <inheritdoc />
@@ -202,10 +225,31 @@ public sealed class ButlerService : IButlerService
         var effectiveOptions = options ?? _options.DefaultGenerationOptions;
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
-        await foreach (var piece in generator.StreamAsync(prepared, effectiveOptions, linked.Token).ConfigureAwait(false))
+
+        var correlationId = Guid.NewGuid();
+        var sw = Stopwatch.StartNew();
+        var tokenCount = 0;
+        var firstToken = true;
+
+        await foreach (var piece in generator.StreamAsync(prepared, effectiveOptions, linked.Token)
+            .ConfigureAwait(false))
         {
+            if (firstToken)
+            {
+                firstToken = false;
+                await FireObserverAsync(o => o.OnStreamStartedAsync(
+                    new ButlerStreamEvent(correlationId, prepared, sw.Elapsed, 0, DateTimeOffset.UtcNow),
+                    ct), ct).ConfigureAwait(false);
+            }
+
+            tokenCount++;
             yield return piece;
         }
+
+        sw.Stop();
+        await FireObserverAsync(o => o.OnStreamCompletedAsync(
+            new ButlerStreamEvent(correlationId, prepared, sw.Elapsed, tokenCount, DateTimeOffset.UtcNow),
+            ct), ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -216,16 +260,33 @@ public sealed class ButlerService : IButlerService
 
         if (_options.ToolBridge is null)
         {
-            return new ToolResult
+            var failResult = new ToolResult
             {
                 ToolName = invocation.ToolName,
                 Success = false,
                 Error = "No tool bridge configured.",
             };
+
+            await FireObserverAsync(o => o.OnToolInvokedAsync(
+                new ButlerToolEvent(Guid.NewGuid(), invocation, failResult,
+                    TimeSpan.Zero, DateTimeOffset.UtcNow),
+                ct), ct).ConfigureAwait(false);
+
+            return failResult;
         }
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
-        return await _options.ToolBridge.InvokeAsync(invocation, linked.Token).ConfigureAwait(false);
+
+        var correlationId = Guid.NewGuid();
+        var sw = Stopwatch.StartNew();
+        var result = await _options.ToolBridge.InvokeAsync(invocation, linked.Token).ConfigureAwait(false);
+        sw.Stop();
+
+        await FireObserverAsync(o => o.OnToolInvokedAsync(
+            new ButlerToolEvent(correlationId, invocation, result, sw.Elapsed, DateTimeOffset.UtcNow),
+            ct), ct).ConfigureAwait(false);
+
+        return result;
     }
 
     /// <inheritdoc />
@@ -250,7 +311,7 @@ public sealed class ButlerService : IButlerService
     }
 
     // ------------------------------------------------------------------
-    // internals
+    // Internals
     // ------------------------------------------------------------------
 
     private async Task EnsureStartedAsync(CancellationToken ct)
@@ -319,6 +380,26 @@ public sealed class ButlerService : IButlerService
             prepared.Add(new ChatMessage("system", _options.SystemPrompt));
         prepared.AddRange(messages);
         return prepared;
+    }
+
+    /// <summary>
+    /// Calls <paramref name="action"/> on the configured observer, catching and
+    /// logging any exceptions so they never propagate to the butler caller.
+    /// </summary>
+    private async ValueTask FireObserverAsync(
+        Func<IButlerObserver, ValueTask> action,
+        CancellationToken ct)
+    {
+        if (_options.Observer is null) return;
+        try
+        {
+            await action(_options.Observer).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { /* respect cancellation silently */ }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "IButlerObserver threw an exception; observer errors are non-fatal.");
+        }
     }
 
     private void ThrowIfDisposed()

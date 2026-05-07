@@ -87,6 +87,14 @@ public sealed class ButlerOptions
     public string? LoopbackToken { get; init; }
 
     /// <summary>
+    /// Optional observer that receives lifecycle and inference events.
+    /// Use this to plug in analytics, usage tracking, or platform-specific
+    /// economics (e.g. Qi/Karma accumulation) without modifying BhenguAI.
+    /// <c>null</c> (default) disables all observer callbacks.
+    /// </summary>
+    public IButlerObserver? Observer { get; init; }
+
+    /// <summary>
     /// Generates a cryptographically random 32-byte token, base64-encoded.
     /// Used by <see cref="Endpoints.HttpLoopbackEndpoint"/> when
     /// <see cref="LoopbackToken"/> is <c>null</c>.
