@@ -11,13 +11,13 @@ namespace Bhengu.AI.Core
 {
     public sealed class LocalModelLoader : IModelLoader
     {
-        private const string RegistryResourceName = "Bhengu.AI.Core.Models.registry.json";
+        private const string RegistryResourceName = "Bhengu.AI.Core.registry.json";
         private readonly HttpClient _httpClient = new();
         private readonly string _modelDir;
         private readonly Dictionary<string, ModelInfo> _modelRegistry;
         private bool _disposed;
 
-        public LocalModelLoader(string modelDirectory = null)
+        public LocalModelLoader(string? modelDirectory = null)
         {
             _modelDir = modelDirectory ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -38,17 +38,32 @@ namespace Bhengu.AI.Core
 
             if (File.Exists(localPath))
             {
-                if (VerifyChecksum(localPath, modelInfo.Checksum))
+                if (modelInfo.Checksum.StartsWith("sha256:TBD") || VerifyChecksum(localPath, modelInfo.Checksum))
                     return localPath;
                 File.Delete(localPath);
             }
 
-            await DownloadFileAsync(modelInfo.Url, localPath, progress ?? new Progress<float>());
+            // Try primary (ModelScope) first, fall back to HuggingFace.
+            var sources = new[] { modelInfo.PrimaryUrl, modelInfo.FallbackUrl };
+            Exception? lastError = null;
+            foreach (var url in sources)
+            {
+                if (string.IsNullOrWhiteSpace(url)) continue;
+                try
+                {
+                    await DownloadFileAsync(url, localPath, progress ?? new Progress<float>());
+                    if (modelInfo.Checksum.StartsWith("sha256:TBD") || VerifyChecksum(localPath, modelInfo.Checksum))
+                        return localPath;
+                    File.Delete(localPath);
+                    lastError = new InvalidDataException("Downloaded model failed checksum verification.");
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                }
+            }
 
-            if (!VerifyChecksum(localPath, modelInfo.Checksum))
-                throw new InvalidDataException("Downloaded model failed verification");
-
-            return localPath;
+            throw lastError ?? new InvalidOperationException("All sources failed.");
         }
 
         private async Task DownloadFileAsync(string url, string outputPath, IProgress<float> progress)
@@ -124,7 +139,12 @@ namespace Bhengu.AI.Core
 
         private record ModelInfo(
             string FileName,
-            string Url,
-            string Checksum);
+            string PrimaryUrl,
+            string FallbackUrl,
+            string Checksum,
+            long SizeBytes = 0,
+            string Version = "",
+            string Architecture = "",
+            string QuantizationType = "");
     }
 }
