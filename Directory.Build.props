@@ -4,15 +4,21 @@
     <Version>1.1.0</Version>
     <Authors>Thamsanqa Bengu; Bhengu B.V.</Authors>
     <Company>Bhengu B.V.</Company>
-    <Description>Enterprise-grade AI model management with Hugging Face integration</Description>
-    
+    <Description>On-device AI library for the TheGeekNetwork ecosystem (BhenguAI / Butler / B!).</Description>
+
+    <!-- ========== TARGET FRAMEWORK & LANGUAGE ========== -->
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
     <!-- ========== ESSENTIAL CONFIGURATION ========== -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <RepositoryUrl>https://github.com/bhengubv/Bhengu.AI</RepositoryUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    
+
     <!-- ========== BUILD OPTIMIZATIONS ========== -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -32,16 +38,16 @@
     <None Include="$(PackageReadmeFullPath)" Pack="true" PackagePath="\" Condition="Exists('$(PackageReadmeFullPath)')">
       <Visible>false</Visible>
     </None>
-    
+
     <!-- ========== PACKAGE REFERENCES ========== -->
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
     <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="All"/>
   </ItemGroup>
 
   <Target Name="ValidatePackageAssets" BeforeTargets="Pack">
-    <Error Text="Required package icon not found at $(PackageIconFullPath)" 
+    <Error Text="Required package icon not found at $(PackageIconFullPath)"
            Condition="!Exists('$(PackageIconFullPath)')"/>
-    <Error Text="Required README not found at $(PackageReadmeFullPath)" 
+    <Error Text="Required README not found at $(PackageReadmeFullPath)"
            Condition="!Exists('$(PackageReadmeFullPath)')"/>
   </Target>
 </Project>

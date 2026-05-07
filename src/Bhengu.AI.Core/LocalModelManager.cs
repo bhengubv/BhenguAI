@@ -1,8 +1,10 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using Bhengu.AI.Core.Sources;
 
 namespace Bhengu.AI.Core
 {
@@ -18,9 +20,25 @@ namespace Bhengu.AI.Core
 
             if (modelRepositoryUrl != null)
             {
-                _modelDownloader = new HuggingFaceModelDownloader();
+                _modelDownloader = new ModelDownloader(
+                    new IModelSource[]
+                    {
+                        new ModelScopeSource(),
+                        new HuggingFaceSource(),
+                    },
+                    ownsSources: true);
             }
 
+            if (!Directory.Exists(_modelsDirectory))
+            {
+                Directory.CreateDirectory(_modelsDirectory);
+            }
+        }
+
+        public LocalModelManager(IModelDownloader modelDownloader, string modelsDirectory = "Models")
+        {
+            _modelDownloader = modelDownloader ?? throw new ArgumentNullException(nameof(modelDownloader));
+            _modelsDirectory = modelsDirectory;
             if (!Directory.Exists(_modelsDirectory))
             {
                 Directory.CreateDirectory(_modelsDirectory);

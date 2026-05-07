@@ -13,8 +13,9 @@
 		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
 	</ItemGroup>
 
+	<!-- ONNX Runtime removed: previous MiniLM embedder is US-origin and pending replacement.
+	     A sovereign-origin embedder (BGE-zh, Qwen-Embedding) will be wired here later. -->
 	<ItemGroup>
-		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.16.0" />
 	</ItemGroup>
 
 	<PropertyGroup>

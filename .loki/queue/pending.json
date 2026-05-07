@@ -1,0 +1,86 @@
+{
+  "tasks": [
+    {
+      "id": "task-A",
+      "type": "eng-backend",
+      "priority": 9,
+      "payload": {
+        "group": "Registry + Downloader",
+        "description": "Replace Phi-3 entries in registry.json with Qwen 3 14B Q4_K_M. Rename HuggingFaceModelDownloader.cs to ModelDownloader.cs. Add IModelSource abstraction with ModelScopeSource (primary) and HuggingFaceSource (fallback). Source picker falls through on failure.",
+        "files": [
+          "src/Bhengu.AI.Core/registry.json",
+          "src/Bhengu.AI.Core/ModelDownloader.cs",
+          "src/Bhengu.AI.Core/IModelSource.cs",
+          "src/Bhengu.AI.Core/Sources/ModelScopeSource.cs",
+          "src/Bhengu.AI.Core/Sources/HuggingFaceSource.cs"
+        ]
+      },
+      "status": "pending"
+    },
+    {
+      "id": "task-B",
+      "type": "eng-backend",
+      "priority": 9,
+      "payload": {
+        "group": "Inference layer",
+        "description": "Create Bhengu.AI.Inference project. Add llama.cpp P/Invoke bindings (LlamaCppInterop.cs) for Android arm64, iOS arm64, Windows x64, macOS arm64. Rename Phi3MiniTextEmbedder.cs to QwenTextGenerator.cs and replace stub with proper IChatGenerator interface implementation that uses LlamaCppInterop. Replace PlatformInterop.cs (drop TFLite/CoreML, use llama.cpp).",
+        "files": [
+          "src/Bhengu.AI.Inference/Bhengu.AI.Inference.csproj",
+          "src/Bhengu.AI.Inference/LlamaCppInterop.cs",
+          "src/Bhengu.AI.Inference/IChatGenerator.cs",
+          "src/Bhengu.AI.Inference/QwenTextGenerator.cs",
+          "src/Bhengu.AI.Core/PlatformInterop.cs"
+        ]
+      },
+      "status": "pending"
+    },
+    {
+      "id": "task-C",
+      "type": "eng-backend",
+      "priority": 7,
+      "payload": {
+        "group": "Tools bridge",
+        "description": "Create Bhengu.AI.Tools project. Define IToolBridge interface for function-calling. Implement TheGeekNetworkTools that exposes the 36 APIs (AccountAPI, AuthAPI, WalletAPI, etc.) as callable tools. Provide tool manifest generation from API descriptions.",
+        "files": [
+          "src/Bhengu.AI.Tools/Bhengu.AI.Tools.csproj",
+          "src/Bhengu.AI.Tools/IToolBridge.cs",
+          "src/Bhengu.AI.Tools/ToolDefinition.cs",
+          "src/Bhengu.AI.Tools/TheGeekNetworkTools.cs",
+          "src/Bhengu.AI.Tools/ToolManifestGenerator.cs"
+        ]
+      },
+      "status": "pending"
+    },
+    {
+      "id": "task-D",
+      "type": "eng-frontend",
+      "priority": 7,
+      "payload": {
+        "group": "Engine + Docs + Sample + BuildProps",
+        "description": "Fix BhenguEngine.cs (currently references EmbeddingService and SearchService classes that don't exist). Update Directory.Build.props to net9.0. Update README.md to reflect new BhenguAI/Butler positioning. Write SETUP.md (how to acquire/build llama.cpp natives per platform). Write TODO.md (PowerInfer-2 integration, expert streaming, MoE handling, etc.). Update samples/ConsoleTest to demo: download Qwen via ModelScope, load via llama.cpp, run a chat completion.",
+        "files": [
+          "src/Bhengu.AI.Core/BhenguEngine.cs",
+          "Directory.Build.props",
+          "README.md",
+          "SETUP.md",
+          "TODO.md",
+          "samples/ConsoleTest/Program.cs"
+        ]
+      },
+      "status": "pending"
+    },
+    {
+      "id": "task-E",
+      "type": "eng-infra",
+      "priority": 5,
+      "payload": {
+        "group": "Solution + project wiring",
+        "description": "Add new projects (Bhengu.AI.Inference, Bhengu.AI.Tools) to BhenguAI.sln. Add project references where needed (Embeddings → Inference, Tools → Core). Ensure solution builds (compiles) with native binaries marked TBD.",
+        "files": [
+          "BhenguAI.sln"
+        ]
+      },
+      "status": "pending"
+    }
+  ]
+}

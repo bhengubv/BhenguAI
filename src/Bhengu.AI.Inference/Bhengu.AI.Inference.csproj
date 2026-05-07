@@ -3,14 +3,20 @@
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="registry.json" />
+		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
 	</ItemGroup>
 
 	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
 		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<!-- Native llama.cpp libs (libllama.so / libllama.dylib / llama.dll) are
+		     supplied separately at deploy time. See SETUP.md. -->
 		<PublishReadyToRun>false</PublishReadyToRun>
 		<StripSymbols>true</StripSymbols>
 	</PropertyGroup>
