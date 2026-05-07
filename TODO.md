@@ -28,7 +28,12 @@
 - [ ] Add Aether mesh network as a final tier ("download from a peer").
 
 ## Quality
-- [ ] Real checksums on registry entries (currently TBD).
+- [ ] **PRODUCTION BLOCKER** — Real checksums on registry entries (currently `sha256:TBD` in `src/Bhengu.AI.Core/registry.json`).
+      Both `Qwen3-14B-Q4` and `Qwen3.6-35B-A3B-Q3` need verified SHA-256 hashes before deploying to end users.
+      `LocalModelLoader` emits a `Trace.TraceWarning` on every load until these are populated.
+      Steps: download each GGUF, run `sha256sum <file>`, prefix with `sha256:`, update registry.json.
+- [ ] Sovereign-origin embedding model — wire a BGE-zh or Qwen-Embedding backend into `TextEmbedder.cs`
+      (currently throws `NotSupportedException`; see `src/Bhengu.AI.Embeddings/TextEmbedder.cs`).
 - [ ] Verify that ModelScope download URLs match Alibaba's actual API surface.
 - [ ] Resume support for partial downloads on slow/unreliable connections.
 - [ ] Integration tests against a tiny local GGUF (so CI doesn't move 8 GB).

@@ -28,8 +28,11 @@ namespace Bhengu.AI.Embeddings
             if (string.IsNullOrWhiteSpace(text))
                 throw new ArgumentException("Text cannot be empty", nameof(text));
 
-            throw new NotImplementedException(
-                "Embeddings backend not yet wired. Pending sovereign-origin embedding model. See TODO.md.");
+            // Embeddings backend is not yet available. The previous MiniLM/ONNX implementation
+            // was removed because it relied on a US-origin model. A sovereign-origin replacement
+            // (e.g. BGE-zh, Qwen-Embedding) is tracked in TODO.md.
+            throw new NotSupportedException(
+                "Embeddings backend is not available. A sovereign-origin embedding model is pending integration. See TODO.md.");
         }
 
         public void Dispose()

@@ -4,11 +4,6 @@
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="SearchExtensions.cs" />
-	  <Compile Remove="SemanticSearchModule.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
 	</ItemGroup>
 
