@@ -462,7 +462,7 @@ public sealed class QwenTextGenerator : IChatGenerator
     /// returning the decoded string and trimming the consumed bytes. Any
     /// trailing partial codepoint stays buffered for the next call.
     /// </summary>
-    private static bool TryDrainUtf8(List<byte> pending, out string decoded)
+    internal static bool TryDrainUtf8(List<byte> pending, out string decoded)
     {
         if (pending.Count == 0)
         {
@@ -510,7 +510,7 @@ public sealed class QwenTextGenerator : IChatGenerator
         return decoded.Length > 0;
     }
 
-    private static bool TryFindStopSequence(StringBuilder sb, string[] stops, out int index)
+    internal static bool TryFindStopSequence(StringBuilder sb, string[] stops, out int index)
     {
         var s = sb.ToString();
         foreach (var stop in stops)
