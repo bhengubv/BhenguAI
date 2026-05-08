@@ -7,12 +7,13 @@ public static class SimdOps
     {
         if (Vector.IsHardwareAccelerated && a.Length >= Vector<float>.Count)
         {
-            // Hardware-accelerated path
+            // Hardware-accelerated path.
             var dot = 0f;
             var normA = 0f;
             var normB = 0f;
 
-            for (int i = 0; i <= a.Length - Vector<float>.Count; i += Vector<float>.Count)
+            int i;
+            for (i = 0; i <= a.Length - Vector<float>.Count; i += Vector<float>.Count)
             {
                 var va = new Vector<float>(a.Slice(i));
                 var vb = new Vector<float>(b.Slice(i));
@@ -20,6 +21,15 @@ public static class SimdOps
                 normA += Vector.Dot(va, va);
                 normB += Vector.Dot(vb, vb);
             }
+
+            // Scalar tail — remaining elements that didn't fill a full SIMD lane.
+            for (; i < a.Length; i++)
+            {
+                dot += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+
             return dot / (MathF.Sqrt(normA) * MathF.Sqrt(normB));
         }
         else
