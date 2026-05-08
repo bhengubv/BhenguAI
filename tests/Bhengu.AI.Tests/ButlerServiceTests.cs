@@ -313,4 +313,116 @@ public sealed class ButlerServiceTests : IDisposable
         var results = await Task.WhenAll(t1, t2);
         Assert.All(results, r => Assert.Equal("pong", r));
     }
+
+    // ------------------------------------------------------------------
+    // AskAsync argument guards
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task AskAsync_NullQuestion_ThrowsArgumentException()
+    {
+        await using var svc = BuildService();
+        await svc.StartAsync();
+
+        // ArgumentException.ThrowIfNullOrEmpty raises ArgumentNullException for null.
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => svc.AskAsync(null!));
+    }
+
+    [Fact]
+    public async Task AskAsync_EmptyQuestion_ThrowsArgumentException()
+    {
+        await using var svc = BuildService();
+        await svc.StartAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.AskAsync(""));
+    }
+
+    // ------------------------------------------------------------------
+    // Auto-start via EnsureStartedAsync
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ChatAsync_NotYetStarted_AutoStartsAndSucceeds()
+    {
+        // EnsureStartedAsync calls StartAsync if not yet started.
+        await using var svc = BuildService(reply: "auto");
+        Assert.False(svc.IsReady);
+
+        var result = await svc.ChatAsync(new[] { new ChatMessage("user", "hi") });
+
+        Assert.True(svc.IsReady);
+        Assert.Equal("auto", result);
+    }
+
+    [Fact]
+    public async Task AskAsync_NotYetStarted_AutoStartsAndSucceeds()
+    {
+        await using var svc = BuildService(reply: "auto-ask");
+        var result = await svc.AskAsync("hello?");
+        Assert.Equal("auto-ask", result);
+    }
+
+    // ------------------------------------------------------------------
+    // StreamAsync argument guards
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StreamAsync_NullMessages_Throws()
+    {
+        await using var svc = BuildService();
+        await svc.StartAsync();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        {
+            await foreach (var _ in svc.StreamAsync(null!)) { }
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // InvokeToolAsync guards
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task InvokeToolAsync_NullInvocation_Throws()
+    {
+        await using var svc = BuildService();
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            svc.InvokeToolAsync(null!));
+    }
+
+    [Fact]
+    public async Task InvokeToolAsync_BeforeStart_NoBridge_ReturnsFailure()
+    {
+        // InvokeToolAsync does NOT require the service to be started.
+        await using var svc = BuildService(toolBridge: null);
+
+        var result = await svc.InvokeToolAsync(new ToolInvocation
+        {
+            ToolName  = "any.tool",
+            Arguments = new Dictionary<string, object?>(),
+        });
+
+        Assert.False(result.Success);
+    }
+
+    // ------------------------------------------------------------------
+    // WarmOnStart
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task WarmOnStart_True_CallsGeneratorDuringStart()
+    {
+        var generator = new FakeChatGenerator("warm");
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = true,
+            SystemPrompt = "sys",
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        // One call from warm-up.
+        Assert.Equal(1, generator.GenerateCallCount);
+    }
 }
