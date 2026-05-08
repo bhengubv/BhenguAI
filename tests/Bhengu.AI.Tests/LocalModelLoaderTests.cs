@@ -104,6 +104,50 @@ public sealed class LocalModelLoaderTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // TBD checksum behaviour (production blocker documentation)
+    // PRODUCTION BLOCKER: see TODO.md — all models currently have sha256:TBD.
+    // These tests document the current behaviour until real hashes are computed.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Documents that <see cref="LocalModelLoader.ModelExists"/> returns
+    /// <c>false</c> for any model whose registry entry has <c>sha256:TBD</c>,
+    /// even when the physical file is present.
+    /// This is an inconsistency with <see cref="LocalModelLoader.DownloadModelAsync"/>
+    /// which skips verification for TBD. Real checksums must be added before shipping.
+    /// </summary>
+    [Fact]
+    public void ModelExists_TbdChecksumWithFilePresent_ReturnsFalse()
+    {
+        // Synthesise the expected file name from what the registry specifies.
+        var modelPath = Path.Combine(_tempDir, "qwen3-14b-instruct-q4_k_m.gguf");
+        File.WriteAllBytes(modelPath, new byte[16]); // sentinel file
+
+        using var loader = new LocalModelLoader(_tempDir);
+        // File exists but checksum is TBD → VerifyChecksum("sha256:TBD") always
+        // returns false because the actual SHA-256 never equals the literal "TBD".
+        Assert.False(loader.ModelExists("Qwen3-14B-Q4"));
+    }
+
+    /// <summary>
+    /// Documents that <see cref="LocalModelLoader.DownloadModelAsync"/> skips
+    /// re-download and verification when the local file exists and the checksum
+    /// is <c>sha256:TBD</c>. This is the correct short-circuit for development use.
+    /// </summary>
+    [Fact]
+    public async Task DownloadModelAsync_TbdChecksumExistingFile_ReturnsPathWithoutDownload()
+    {
+        var modelPath = Path.Combine(_tempDir, "qwen3-14b-instruct-q4_k_m.gguf");
+        File.WriteAllBytes(modelPath, new byte[16]); // sentinel file
+
+        using var loader = new LocalModelLoader(_tempDir);
+        // Checksum is TBD + file exists → loader returns path immediately,
+        // no network call, no ArgumentException.
+        var result = await loader.DownloadModelAsync("Qwen3-14B-Q4");
+        Assert.Equal(modelPath, result, StringComparer.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------
     // CheckForCriticalUpdateAsync — no network in CI, must not throw
     // ------------------------------------------------------------------
 
