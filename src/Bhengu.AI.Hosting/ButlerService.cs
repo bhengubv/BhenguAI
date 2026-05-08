@@ -44,7 +44,9 @@ public sealed class ButlerService : IButlerService
     private readonly ILogger<ButlerService> _logger;
 
     private readonly SemaphoreSlim _startGate = new(1, 1);
-    private readonly CancellationTokenSource _shutdownCts = new();
+    // Not readonly — reset to a fresh instance after each StopAsync so the
+    // service can be restarted. DisposeAsync disposes the live instance.
+    private CancellationTokenSource _shutdownCts = new();
 
     private IChatGenerator? _generator;
     private bool _started;
@@ -160,6 +162,16 @@ public sealed class ButlerService : IButlerService
 
             await FireObserverAsync(o => o.OnStoppedAsync(CancellationToken.None),
                 CancellationToken.None).ConfigureAwait(false);
+
+            // Prepare a fresh CTS so the service can be restarted.
+            // (DisposeAsync will dispose the live instance; disposed instances
+            //  are harmless to replace here because _disposed == false here.)
+            if (!_disposed)
+            {
+                var old = _shutdownCts;
+                _shutdownCts = new CancellationTokenSource();
+                try { old.Dispose(); } catch { /* already cancelled/disposed */ }
+            }
         }
         finally
         {

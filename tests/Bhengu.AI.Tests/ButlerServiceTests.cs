@@ -425,4 +425,202 @@ public sealed class ButlerServiceTests : IDisposable
         // One call from warm-up.
         Assert.Equal(1, generator.GenerateCallCount);
     }
+
+    // ------------------------------------------------------------------
+    // PrepareMessages — role case-insensitivity
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task PrepareMessages_AllCapsSystemRole_DoesNotPrepend()
+    {
+        // "SYSTEM" (all-caps) must satisfy the OrdinalIgnoreCase check so
+        // no second system message is prepended.
+        var generator = new FakeChatGenerator("reply");
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            SystemPrompt = "Injected",
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        var messages = new List<ChatMessage>
+        {
+            new("SYSTEM", "Custom sys"),
+            new("user", "hi"),
+        };
+        await svc.ChatAsync(messages);
+
+        var sent = generator.LastMessages!;
+        Assert.Equal(2, sent.Count);
+        // The original role casing is preserved (PrepareMessages doesn't normalise roles).
+        Assert.Equal("SYSTEM", sent[0].Role);
+    }
+
+    [Fact]
+    public async Task PrepareMessages_TitleCaseSystemRole_DoesNotPrepend()
+    {
+        var generator = new FakeChatGenerator("reply");
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            SystemPrompt = "Injected",
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        var messages = new List<ChatMessage>
+        {
+            new("System", "Custom sys"),
+            new("user", "hi"),
+        };
+        await svc.ChatAsync(messages);
+
+        Assert.Equal(2, generator.LastMessages!.Count);
+    }
+
+    [Fact]
+    public async Task PrepareMessages_EmptySystemPrompt_DoesNotPrepend()
+    {
+        // When SystemPrompt is empty, PrepareMessages must not insert a
+        // blank system message (guarded by string.IsNullOrEmpty check).
+        var generator = new FakeChatGenerator("reply");
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            SystemPrompt = "",
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        var messages = new[] { new ChatMessage("user", "hi") };
+        await svc.ChatAsync(messages);
+
+        var sent = Assert.Single(generator.LastMessages!);
+        Assert.Equal("user", sent.Role);
+    }
+
+    // ------------------------------------------------------------------
+    // Observer — stream events
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Observer_OnStreamStartedAsync_Called()
+    {
+        var observer = new FakeButlerObserver();
+        var chunks   = new[] { "x", "y", "z" };
+        await using var svc = BuildService(streamChunks: chunks, observer: observer);
+        await svc.StartAsync();
+
+        await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "q") })) { }
+
+        // OnStreamStartedAsync fires on the first yielded token.
+        Assert.Equal(1, observer.StreamStartedCount);
+    }
+
+    // ------------------------------------------------------------------
+    // StopAsync idempotency / before-start safety
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StopAsync_BeforeStart_DoesNotThrow()
+    {
+        await using var svc = BuildService();
+        var ex = await Record.ExceptionAsync(() => svc.StopAsync());
+        Assert.Null(ex);
+        Assert.False(svc.IsReady);
+    }
+
+    [Fact]
+    public async Task StopAsync_TwiceAfterStart_IsIdempotent()
+    {
+        await using var svc = BuildService();
+        await svc.StartAsync();
+        await svc.StopAsync();
+        var ex = await Record.ExceptionAsync(() => svc.StopAsync());
+        Assert.Null(ex);
+        Assert.False(svc.IsReady);
+    }
+
+    // ------------------------------------------------------------------
+    // Start → Stop → Start cycle
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task RestartCycle_StartStopStart_ServiceBecomesReadyAgain()
+    {
+        await using var svc = BuildService(reply: "restarted");
+        await svc.StartAsync();
+        await svc.StopAsync();
+        await svc.StartAsync();                // restart
+
+        Assert.True(svc.IsReady);
+        var result = await svc.ChatAsync(new[] { new ChatMessage("user", "ping") });
+        Assert.Equal("restarted", result);
+    }
+
+    // ------------------------------------------------------------------
+    // GenerationOptions plumbing
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ChatAsync_DefaultGenerationOptions_PassedToGenerator()
+    {
+        var customOpts = new GenerationOptions { MaxTokens = 128, Temperature = 0.1f };
+        var generator  = new FakeChatGenerator("reply");
+        var butlerOpts = new ButlerOptions
+        {
+            ModelPath              = _modelPath,
+            WarmOnStart            = false,
+            DefaultGenerationOptions = customOpts,
+        };
+        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        await svc.ChatAsync(new[] { new ChatMessage("user", "hi") });
+
+        Assert.Same(customOpts, generator.LastGenerateOptions);
+    }
+
+    [Fact]
+    public async Task ChatAsync_CallerSuppliedOptions_OverrideDefaults()
+    {
+        var defaultOpts  = new GenerationOptions { MaxTokens = 128 };
+        var callerOpts   = new GenerationOptions { MaxTokens = 256, Temperature = 0.9f };
+        var generator    = new FakeChatGenerator("reply");
+        var butlerOpts   = new ButlerOptions
+        {
+            ModelPath              = _modelPath,
+            WarmOnStart            = false,
+            DefaultGenerationOptions = defaultOpts,
+        };
+        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        await svc.ChatAsync(new[] { new ChatMessage("user", "hi") }, callerOpts);
+
+        // Caller-supplied options should win; default should NOT be used.
+        Assert.Same(callerOpts, generator.LastGenerateOptions);
+        Assert.NotSame(defaultOpts, generator.LastGenerateOptions);
+    }
+
+    // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ChatAsync_PreCancelledToken_ThrowsOperationCancelled()
+    {
+        await using var svc = BuildService();
+        await svc.StartAsync();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            svc.ChatAsync(new[] { new ChatMessage("user", "hi") }, ct: cts.Token));
+    }
 }

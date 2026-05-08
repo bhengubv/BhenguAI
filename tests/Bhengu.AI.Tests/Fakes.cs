@@ -79,6 +79,12 @@ internal sealed class FakeChatGenerator : IChatGenerator
     public int StreamCallCount { get; private set; }
     public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
 
+    /// <summary>The <see cref="GenerationOptions"/> passed to the most recent GenerateAsync call.</summary>
+    public GenerationOptions? LastGenerateOptions { get; private set; }
+
+    /// <summary>The <see cref="GenerationOptions"/> passed to the most recent StreamAsync call.</summary>
+    public GenerationOptions? LastStreamOptions { get; private set; }
+
     public Task<string> GenerateAsync(
         IReadOnlyList<ChatMessage> messages,
         GenerationOptions? options = null,
@@ -87,6 +93,7 @@ internal sealed class FakeChatGenerator : IChatGenerator
         ct.ThrowIfCancellationRequested();
         GenerateCallCount++;
         LastMessages = messages;
+        LastGenerateOptions = options;
         return Task.FromResult(_reply);
     }
 
@@ -97,6 +104,7 @@ internal sealed class FakeChatGenerator : IChatGenerator
     {
         StreamCallCount++;
         LastMessages = messages;
+        LastStreamOptions = options;
         foreach (var chunk in _streamChunks)
         {
             ct.ThrowIfCancellationRequested();

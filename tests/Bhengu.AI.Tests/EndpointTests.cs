@@ -241,4 +241,247 @@ public sealed class HttpLoopbackEndpointTests : IAsyncLifetime
         // Service has no tool bridge → returns ToolResult{Success=false} → 502
         Assert.Equal(System.Net.HttpStatusCode.BadGateway, resp.StatusCode);
     }
+
+    [Fact]
+    public async Task AskEndpoint_MissingQuestion_Returns400()
+    {
+        using var req = Post("/butler/ask", new { /* no question */ });
+        using var resp = await _http!.SendAsync(req);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task ToolEndpoint_MissingToolName_Returns400()
+    {
+        using var req = Post("/butler/tool", new { arguments = new { } });
+        using var resp = await _http!.SendAsync(req);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChatEndpoint_EmptyMessages_Returns400()
+    {
+        using var req = Post("/butler/chat", new { messages = Array.Empty<object>() });
+        using var resp = await _http!.SendAsync(req);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task StreamEndpoint_ContentType_IsTextEventStream()
+    {
+        using var req = Post("/butler/stream", new
+        {
+            messages = new[] { new { role = "user", content = "stream" } }
+        });
+        // ResponseHeadersRead so we get headers before waiting for the full body.
+        using var resp = await _http!.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        resp.EnsureSuccessStatusCode();
+        Assert.Equal("text/event-stream", resp.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task StreamEndpoint_RawSse_EndsWithDoneEvent()
+    {
+        using var req = Post("/butler/stream", new
+        {
+            messages = new[] { new { role = "user", content = "stream" } }
+        });
+        using var resp = await _http!.SendAsync(req, HttpCompletionOption.ResponseContentRead);
+        var body = await resp.Content.ReadAsStringAsync();
+
+        // The endpoint always writes a terminal "event: done" + "data: {}" frame.
+        Assert.Contains("event: done", body, StringComparison.Ordinal);
+        Assert.Contains("data: {}", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StreamEndpoint_RawSse_ChunksHaveDataPrefix()
+    {
+        // FakeChatGenerator for this class is configured with streamChunks ["loop","back"].
+        using var req = Post("/butler/stream", new
+        {
+            messages = new[] { new { role = "user", content = "stream" } }
+        });
+        using var resp = await _http!.SendAsync(req, HttpCompletionOption.ResponseContentRead);
+        var body = await resp.Content.ReadAsStringAsync();
+
+        // Each chunk is JSON-serialised: "loop" → "\"loop\"", "back" → "\"back\""
+        Assert.Contains("data: \"loop\"", body, StringComparison.Ordinal);
+        Assert.Contains("data: \"back\"", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StreamEndpoint_EmptyMessages_Returns400()
+    {
+        using var req = Post("/butler/stream", new { messages = Array.Empty<object>() });
+        using var resp = await _http!.SendAsync(req);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChatEndpoint_WithOptions_Honours_MaxTokens()
+    {
+        // The endpoint should deserialise the options payload and pass it through.
+        // We cannot inspect what was passed to the generator from here, but we
+        // can verify that no error is returned when valid options are provided.
+        using var req = Post("/butler/chat", new
+        {
+            messages = new[] { new { role = "user", content = "hi" } },
+            options  = new { maxTokens = 64, temperature = 0.5f, topP = 0.8f, topK = 20 }
+        });
+        using var resp = await _http!.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HttpLoopbackEndpoint — standalone configuration / lifecycle tests
+// ---------------------------------------------------------------------------
+
+public sealed class HttpLoopbackEndpointConfigTests
+{
+    [Fact]
+    public void Constructor_NullOptions_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => new HttpLoopbackEndpoint(null!));
+    }
+
+    [Fact]
+    public async Task StartAsync_NullService_Throws()
+    {
+        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => endpoint.StartAsync(null!));
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenNotStarted_IsNoOp()
+    {
+        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        var ex = await Record.ExceptionAsync(() => endpoint.StopAsync());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task BoundPort_BeforeStart_IsZero()
+    {
+        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        Assert.Equal(0, endpoint.BoundPort);
+    }
+
+    [Fact]
+    public async Task Token_BeforeStart_IsNull()
+    {
+        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        Assert.Null(endpoint.Token);
+    }
+
+    [Fact]
+    public async Task StartAsync_WithConfiguredToken_UsesIt()
+    {
+        var modelPath = Path.GetTempFileName();
+        try
+        {
+            var endpointOpts = new ButlerOptions
+            {
+                ModelPath     = modelPath,
+                LoopbackToken = "my-fixed-token",
+            };
+            var svcOpts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
+            await using var svc = new ButlerService(svcOpts,
+                generatorFactory: _ => new FakeChatGenerator());
+            await svc.StartAsync();
+
+            await using var endpoint = new HttpLoopbackEndpoint(endpointOpts);
+            await endpoint.StartAsync(svc);
+
+            Assert.Equal("my-fixed-token", endpoint.Token);
+        }
+        finally
+        {
+            try { File.Delete(modelPath); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_WithoutConfiguredToken_GeneratesToken()
+    {
+        var modelPath = Path.GetTempFileName();
+        try
+        {
+            var endpointOpts = new ButlerOptions { ModelPath = modelPath };
+            var svcOpts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
+            await using var svc = new ButlerService(svcOpts,
+                generatorFactory: _ => new FakeChatGenerator());
+            await svc.StartAsync();
+
+            await using var endpoint = new HttpLoopbackEndpoint(endpointOpts);
+            await endpoint.StartAsync(svc);
+
+            Assert.NotNull(endpoint.Token);
+            Assert.NotEmpty(endpoint.Token);
+        }
+        finally
+        {
+            try { File.Delete(modelPath); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_Idempotent()
+    {
+        var modelPath = Path.GetTempFileName();
+        try
+        {
+            var opts = new ButlerOptions { ModelPath = modelPath, LoopbackToken = "tok" };
+            var svcOpts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
+            await using var svc = new ButlerService(svcOpts,
+                generatorFactory: _ => new FakeChatGenerator());
+            await svc.StartAsync();
+
+            await using var endpoint = new HttpLoopbackEndpoint(opts);
+            await endpoint.StartAsync(svc);
+            var firstPort = endpoint.BoundPort;
+
+            await endpoint.StartAsync(svc); // second call must be a no-op
+
+            Assert.Equal(firstPort, endpoint.BoundPort);
+        }
+        finally
+        {
+            try { File.Delete(modelPath); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_AfterDispose_Throws()
+    {
+        var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        await endpoint.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            endpoint.StartAsync(new FakeButlerService()));
+    }
+}
+
+// Minimal IButlerService stub used only for the "start after dispose" test.
+file sealed class FakeButlerService : IButlerService
+{
+    public bool IsReady => false;
+    public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<string> AskAsync(string question, CancellationToken ct = default)
+        => Task.FromResult(string.Empty);
+    public Task<string> ChatAsync(
+        IReadOnlyList<ChatMessage> messages, GenerationOptions? options = null,
+        CancellationToken ct = default) => Task.FromResult(string.Empty);
+    public async IAsyncEnumerable<string> StreamAsync(
+        IReadOnlyList<ChatMessage> messages, GenerationOptions? options = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+    public Task<ToolResult> InvokeToolAsync(ToolInvocation invocation, CancellationToken ct = default)
+        => Task.FromResult(new ToolResult { ToolName = "none", Success = false });
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
