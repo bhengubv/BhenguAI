@@ -68,7 +68,6 @@ internal sealed class FakeChatGenerator : IChatGenerator
 {
     private readonly string _reply;
     private readonly string[] _streamChunks;
-    private bool _disposed;
 
     public FakeChatGenerator(string reply = "Hello!", string[]? streamChunks = null)
     {
@@ -106,7 +105,7 @@ internal sealed class FakeChatGenerator : IChatGenerator
         }
     }
 
-    public void Dispose() { _disposed = true; }
+    public void Dispose() { /* no-op — fake has no native resources */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -279,5 +278,63 @@ internal sealed class FakeModule : IBhenguModule
     public string ModuleName => "Fake";
     public bool IsModelLoaded => true;
     public Task InitAsync(BhenguEngine engine) => Task.CompletedTask;
+    public void Dispose() { }
+}
+
+// ---------------------------------------------------------------------------
+// IModelSource
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Fake model source. Writes a sentinel file on success; throws on demand.
+/// The Name property drives host-matching in ModelDownloader.MatchSource.
+/// </summary>
+internal sealed class FakeModelSource : IModelSource
+{
+    private readonly bool _shouldThrow;
+
+    public FakeModelSource(string name = "fakehost", bool shouldThrow = false)
+    {
+        Name = name;
+        _shouldThrow = shouldThrow;
+    }
+
+    public string Name { get; }
+    public int DownloadCallCount { get; private set; }
+
+    public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+        => Task.FromResult(true);
+
+    public Task DownloadAsync(
+        string url,
+        string localPath,
+        IProgress<DownloadProgress>? progress = null,
+        CancellationToken ct = default)
+    {
+        DownloadCallCount++;
+        if (_shouldThrow)
+            throw new System.Net.Http.HttpRequestException("Simulated source failure");
+        // Write a sentinel so callers that check File.Exists pass.
+        File.WriteAllText(localPath, "fake-model-content");
+        return Task.CompletedTask;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IModelManager
+// ---------------------------------------------------------------------------
+
+internal sealed class FakeModelManager : IModelManager
+{
+    private readonly string _path;
+
+    public FakeModelManager(string path = "fake/path/model.bin") => _path = path;
+
+    public Task<string> GetModelPathAsync(string modelId, CancellationToken ct = default)
+        => Task.FromResult(_path);
+
+    public Task<bool> VerifyModelAsync(string modelPath, byte[] expectedChecksum, CancellationToken ct = default)
+        => Task.FromResult(true);
+
     public void Dispose() { }
 }
