@@ -25,3 +25,6 @@ using System.Runtime.InteropServices;
     DllImportSearchPath.AssemblyDirectory |
     DllImportSearchPath.SafeDirectories |
     DllImportSearchPath.UserDirectories)]
+
+// Allow the test project to access internal members (e.g. BuildQwenChatPrompt).
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Bhengu.AI.Tests")]
