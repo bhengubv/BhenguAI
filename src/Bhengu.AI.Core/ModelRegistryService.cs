@@ -66,8 +66,18 @@ namespace Bhengu.AI.Core.Models
 
         private static bool VerifySignature(string json)
         {
-            // TODO: Implement ECDSA/PGP verification before enabling remote registry updates.
-            return true;
+            // SECURITY: Signature verification infrastructure is not yet in place.
+            // Throwing here causes CheckForUpdatesAsync's catch block to fall back
+            // to the embedded registry, ensuring that no unsigned remote payload
+            // (including one from a MITM or a compromised server) can ever be
+            // deserialised and used as a source of model URLs.
+            //
+            // TODO: Replace with ECDSA / Ed25519 verification once the signing key
+            //       and registry-signing workflow are established.  Until then remote
+            //       registry updates are intentionally blocked.
+            throw new NotSupportedException(
+                "Remote registry signature verification is not yet implemented. " +
+                "Remote updates are blocked until cryptographic signing is in place.");
         }
 
         public void Dispose()
