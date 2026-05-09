@@ -1490,8 +1490,69 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // WarmOnStart + OperationCanceledException propagation
+    //
+    // ButlerService.StartAsync has an explicit:
+    //   catch (OperationCanceledException) { throw; }
+    // around WarmUpAsync so that OCE is NEVER silently swallowed —
+    // a pre-cancelled startup token must abort the entire StartAsync.
+    //
+    // This is distinct from a non-OCE warm-up failure (InvalidOperationException,
+    // IOException, etc.) which IS swallowed with a warning log so the service
+    // can still start and serve callers.
+    //
+    // Confirmed in StartAsync lines 119-122: `catch (OperationCanceledException) { throw; }`
+    // Because OCE propagates before `_started = true` (line 130) the service
+    // must remain non-ready after such a failure.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task WarmOnStart_GeneratorThrowsOce_PropagatesFromStartAsync()
+    {
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = true,
+            SystemPrompt = "sys",
+        };
+        await using var svc = new ButlerService(opts,
+            generatorFactory: _ => new WarmupOceGenerator());
+
+        // StartAsync must propagate the OCE — NOT swallow it as it does for
+        // other exceptions (see WarmOnStart_GeneratorThrowsNonCancelException_ServiceStartsAnyway).
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => svc.StartAsync());
+
+        // Because OCE propagates before `_started = true`, the service must
+        // be non-ready and callers must re-try or surface the cancellation.
+        Assert.False(svc.IsReady);
+    }
+
+    // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Generator that throws <see cref="OperationCanceledException"/> from
+    /// <see cref="IChatGenerator.GenerateAsync"/> unconditionally — used to
+    /// verify that warm-up OCE propagates out of <c>StartAsync</c>.
+    /// </summary>
+    private sealed class WarmupOceGenerator : IChatGenerator
+    {
+        public Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+            => throw new OperationCanceledException("Simulated warm-up cancellation.");
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        { await Task.Yield(); yield break; }
+
+        public void Dispose() { }
+    }
 
     /// <summary>
     /// Tool bridge that always throws <see cref="InvalidOperationException"/>
