@@ -426,6 +426,29 @@ public sealed class ButlerServiceTests : IDisposable
         Assert.Equal(1, generator.GenerateCallCount);
     }
 
+    [Fact]
+    public async Task WarmOnStart_GeneratorThrowsNonCancelException_ServiceStartsAnyway()
+    {
+        // Contract: warm-up exceptions (other than OperationCanceledException) are
+        // swallowed with a warning log.  The service must reach _started = true.
+        var failOnce = new ThrowOnFirstCallGenerator("after-warmup-reply");
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = true,
+            SystemPrompt = "sys",
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => failOnce);
+
+        // StartAsync must NOT throw even though warm-up fails.
+        var startEx = await Record.ExceptionAsync(() => svc.StartAsync());
+        Assert.Null(startEx);
+
+        // Service must be operational after recovery.
+        var reply = await svc.AskAsync("hello");
+        Assert.Equal("after-warmup-reply", reply);
+    }
+
     // ------------------------------------------------------------------
     // PrepareMessages — role case-insensitivity
     // ------------------------------------------------------------------
@@ -622,6 +645,42 @@ public sealed class ButlerServiceTests : IDisposable
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             svc.ChatAsync(new[] { new ChatMessage("user", "hi") }, ct: cts.Token));
+    }
+
+    // ------------------------------------------------------------------
+    // Private helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Generator that throws <see cref="InvalidOperationException"/> on its
+    /// very first <see cref="IChatGenerator.GenerateAsync"/> call (simulating
+    /// a warm-up failure), then returns normally on all subsequent calls.
+    /// </summary>
+    private sealed class ThrowOnFirstCallGenerator : IChatGenerator
+    {
+        private readonly string _reply;
+        private int _callCount;
+
+        public ThrowOnFirstCallGenerator(string reply = "ok") => _reply = reply;
+
+        public Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (Interlocked.Increment(ref _callCount) == 1)
+                throw new InvalidOperationException("Simulated warm-up failure.");
+            return Task.FromResult(_reply);
+        }
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        { await Task.Yield(); yield return _reply; }
+
+        public void Dispose() { }
     }
 }
 

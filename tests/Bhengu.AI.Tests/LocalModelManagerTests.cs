@@ -109,6 +109,41 @@ public sealed class LocalModelManagerTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
+    // GetModelPathAsync — path sanitization
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetModelPathAsync_SlashInModelId_IsSanitized()
+    {
+        // Model IDs often come in "org/model" HuggingFace format.
+        // SanitizeModelId must replace '/' with '_' before using it as a path segment.
+        var dl  = new FakeModelDownloader();
+        var dir = Path.Combine(_tempDir, "sub6");
+        using var mgr = new LocalModelManager(dl, dir);
+
+        var path = await mgr.GetModelPathAsync("Qwen/Qwen3-14B");
+
+        // The returned path must not contain the literal '/' from the model ID.
+        var relativePart = Path.GetFileName(path);
+        Assert.DoesNotContain("/", relativePart, StringComparison.Ordinal);
+        Assert.Contains("Qwen_Qwen3-14B", relativePart, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetModelPathAsync_BackslashInModelId_IsSanitized()
+    {
+        var dl  = new FakeModelDownloader();
+        var dir = Path.Combine(_tempDir, "sub7");
+        using var mgr = new LocalModelManager(dl, dir);
+
+        var path = await mgr.GetModelPathAsync("org\\model-name");
+        var relativePart = Path.GetFileName(path);
+
+        Assert.DoesNotContain("\\", relativePart, StringComparison.Ordinal);
+        Assert.Contains("org_model-name", relativePart, StringComparison.Ordinal);
+    }
+
+    // -----------------------------------------------------------------------
     // Dispose idempotency
     // -----------------------------------------------------------------------
 

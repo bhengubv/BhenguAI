@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Bhengu.AI.Core.Models;
 using Xunit;
@@ -99,5 +100,101 @@ public sealed class ModelRegistryServiceTests
         // GetLatestModel only reads _remoteRegistry / _embeddedRegistry, no HttpClient use.
         var ex = Record.Exception(() => svc.GetLatestModel("any"));
         Assert.Null(ex);
+    }
+}
+
+// ============================================================================
+// ModelEntry and ModelRegistry records
+// ============================================================================
+
+public sealed class ModelEntryTests
+{
+    [Fact]
+    public void Constructor_AllProperties_AreReflected()
+    {
+        var entry = new ModelEntry(
+            Name:         "Qwen3-14B-Q4",
+            Version:      "3.0",
+            Quantization: "Q4_K_M",
+            Url:          "https://hf.co/model.gguf",
+            Checksum:     "sha256:abc123");
+
+        Assert.Equal("Qwen3-14B-Q4",          entry.Name);
+        Assert.Equal("3.0",                    entry.Version);
+        Assert.Equal("Q4_K_M",                entry.Quantization);
+        Assert.Equal("https://hf.co/model.gguf", entry.Url);
+        Assert.Equal("sha256:abc123",          entry.Checksum);
+    }
+
+    [Fact]
+    public void Equality_SameValues_AreEqual()
+    {
+        var e1 = new ModelEntry("A", "1", "Q4", "https://a.b/c", "sha256:x");
+        var e2 = new ModelEntry("A", "1", "Q4", "https://a.b/c", "sha256:x");
+        Assert.Equal(e1, e2);
+    }
+
+    [Fact]
+    public void Equality_DifferentChecksum_NotEqual()
+    {
+        var e1 = new ModelEntry("A", "1", "Q4", "https://a.b/c", "sha256:x");
+        var e2 = new ModelEntry("A", "1", "Q4", "https://a.b/c", "sha256:y");
+        Assert.NotEqual(e1, e2);
+    }
+
+    [Fact]
+    public void WithExpression_OverridesVersion()
+    {
+        var orig    = new ModelEntry("M", "1.0", "Q4", "https://u", "sha256:h");
+        var updated = orig with { Version = "2.0" };
+
+        Assert.Equal("2.0", updated.Version);
+        Assert.Equal("M",   updated.Name);
+    }
+
+    [Fact]
+    public void Checksum_TbdPlaceholder_IsDetectable()
+    {
+        // Production blocker: both registry entries currently carry "sha256:TBD".
+        // This test documents and detects the placeholder so it can't ship silently.
+        var entry = new ModelEntry("Qwen3-14B-Q4", "3.0", "Q4_K_M",
+            "https://hf.co/model.gguf", "sha256:TBD");
+        Assert.Contains("TBD", entry.Checksum, StringComparison.Ordinal);
+    }
+}
+
+public sealed class ModelRegistryRecordTests
+{
+    [Fact]
+    public void Constructor_AllProperties_AreReflected()
+    {
+        var entries = new List<ModelEntry>
+        {
+            new("Qwen3-14B-Q4", "3.0", "Q4_K_M", "https://hf.co/a.gguf", "sha256:abc"),
+        };
+        var ts  = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
+        var reg = new ModelRegistry("https://registry.thegeek.co.za/models.json", ts, entries);
+
+        Assert.Equal("https://registry.thegeek.co.za/models.json", reg.RegistryUrl);
+        Assert.Equal(ts,      reg.LastUpdated);
+        Assert.Single(reg.Models);
+        Assert.Equal("Qwen3-14B-Q4", reg.Models[0].Name);
+    }
+
+    [Fact]
+    public void Equality_SameValues_AreEqual()
+    {
+        var entries = new List<ModelEntry>();
+        var ts      = DateTime.UtcNow;
+        var r1 = new ModelRegistry("https://url", ts, entries);
+        var r2 = new ModelRegistry("https://url", ts, entries);
+        Assert.Equal(r1, r2);
+    }
+
+    [Fact]
+    public void Models_EmptyList_IsValid()
+    {
+        var reg = new ModelRegistry("https://url", DateTime.UtcNow, new List<ModelEntry>());
+        Assert.Empty(reg.Models);
     }
 }
