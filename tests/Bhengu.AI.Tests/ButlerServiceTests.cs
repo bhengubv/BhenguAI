@@ -724,3 +724,96 @@ public sealed class ButlerServicePathResolutionTests
             new ButlerService(null!));
     }
 }
+
+// ============================================================================
+// ButlerService — DisposeAsync generator-cleanup regression test
+//
+// BUG: DisposeAsync sets _disposed = true, then calls StopAsync, which
+// immediately returns because of its "if (_disposed) return" guard —
+// so _generator?.Dispose() inside StopAsync is never reached.
+// This is a PRODUCTION BLOCKER for QwenTextGenerator which holds native
+// llama.cpp handles; the fix is to explicitly dispose the generator in
+// DisposeAsync after StopAsync returns early.
+// ============================================================================
+
+public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
+{
+    private readonly string _modelPath = Path.GetTempFileName();
+
+    public void Dispose()
+    {
+        try { File.Delete(_modelPath); } catch { /* best-effort */ }
+    }
+
+    // Minimal generator that tracks disposal.
+    private sealed class TrackingGenerator : IChatGenerator
+    {
+        public bool IsDisposed { get; private set; }
+
+        public Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult("ok");
+        }
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Yield();
+            yield return "ok";
+        }
+
+        public void Dispose() => IsDisposed = true;
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhileStarted_DisposesGenerator()
+    {
+        // Regression test: before the fix, DisposeAsync set _disposed = true and
+        // then called StopAsync, which returned early because _disposed was true,
+        // so the generator was NEVER disposed — leaking native llama.cpp handles.
+        var tracking = new TrackingGenerator();
+        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        var svc  = new ButlerService(opts, generatorFactory: _ => tracking);
+
+        await svc.StartAsync();
+        Assert.False(tracking.IsDisposed); // sanity: not disposed yet
+
+        await svc.DisposeAsync();
+
+        Assert.True(tracking.IsDisposed); // generator MUST be disposed on DisposeAsync
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhileNotStarted_DoesNotThrow()
+    {
+        var tracking = new TrackingGenerator();
+        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        var svc  = new ButlerService(opts, generatorFactory: _ => tracking);
+
+        // Never started → generator is null → should not throw.
+        var ex = await Record.ExceptionAsync(() => svc.DisposeAsync().AsTask());
+        Assert.Null(ex);
+        Assert.False(tracking.IsDisposed); // factory never called, so nothing to dispose
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ThenStopAsync_IsNoOp()
+    {
+        // After DisposeAsync the service is fully torn down; StopAsync must
+        // silently return (no double-dispose, no exception).
+        var tracking = new TrackingGenerator();
+        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => tracking);
+        await svc.StartAsync();
+        await svc.DisposeAsync();
+
+        var ex = await Record.ExceptionAsync(() => svc.StopAsync());
+        Assert.Null(ex);
+    }
+}
