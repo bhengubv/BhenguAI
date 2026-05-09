@@ -647,6 +647,67 @@ public sealed class ButlerServiceTests : IDisposable
             svc.ChatAsync(new[] { new ChatMessage("user", "hi") }, ct: cts.Token));
     }
 
+    [Fact]
+    public async Task StreamAsync_PreCancelledToken_ThrowsOperationCancelled()
+    {
+        await using var svc = BuildService(streamChunks: new[] { "a", "b", "c" });
+        await svc.StartAsync();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in svc.StreamAsync(
+                new[] { new ChatMessage("user", "hi") }, ct: cts.Token)) { }
+        });
+    }
+
+    [Fact]
+    public async Task Observer_OnChatEvent_CorrelationId_IsNotEmpty()
+    {
+        // ButlerService must assign a fresh GUID per call — never Guid.Empty.
+        var observer = new FakeButlerObserver();
+        await using var svc = BuildService(reply: "hi", observer: observer);
+        await svc.StartAsync();
+
+        await svc.ChatAsync(new[] { new ChatMessage("user", "q") });
+
+        Assert.NotEqual(Guid.Empty, observer.LastChatEvent!.CorrelationId);
+    }
+
+    [Fact]
+    public async Task Observer_OnStreamCompletedAsync_CalledExactlyOnce()
+    {
+        var observer = new FakeButlerObserver();
+        var chunks = new[] { "x", "y" };
+        await using var svc = BuildService(streamChunks: chunks, observer: observer);
+        await svc.StartAsync();
+
+        await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "q") })) { }
+
+        Assert.Equal(1, observer.StreamCompletedCount);
+    }
+
+    [Fact]
+    public async Task StreamAsync_DefaultGenerationOptions_PassedToGenerator()
+    {
+        var customOpts = new GenerationOptions { MaxTokens = 64, Temperature = 0.2f };
+        var generator  = new FakeChatGenerator("r", streamChunks: new[] { "r" });
+        var butlerOpts = new ButlerOptions
+        {
+            ModelPath              = _modelPath,
+            WarmOnStart            = false,
+            DefaultGenerationOptions = customOpts,
+        };
+        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "hi") })) { }
+
+        Assert.Same(customOpts, generator.LastStreamOptions);
+    }
+
     // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
