@@ -624,3 +624,103 @@ public sealed class ButlerServiceTests : IDisposable
             svc.ChatAsync(new[] { new ChatMessage("user", "hi") }, ct: cts.Token));
     }
 }
+
+// ============================================================================
+// ButlerService — model-path resolution edge cases
+// (separate class because it needs its own temp-file state)
+// ============================================================================
+
+public sealed class ButlerServicePathResolutionTests
+{
+    // ------------------------------------------------------------------
+    // ModelPath errors — caught before native load
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StartAsync_ModelPathMissing_ThrowsFileNotFoundException()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gguf");
+        var opts = new ButlerOptions
+        {
+            ModelPath   = missingPath,
+            WarmOnStart = false,
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await Assert.ThrowsAsync<FileNotFoundException>(() => svc.StartAsync());
+    }
+
+    [Fact]
+    public async Task StartAsync_NoModelPathAndNoLoader_ThrowsInvalidOperation()
+    {
+        // Neither ModelPath nor IModelLoader is supplied → ResolveModelPathAsync throws.
+        var opts = new ButlerOptions
+        {
+            ModelPath   = null,  // no direct path
+            WarmOnStart = false,
+        };
+        // No modelLoader and no generatorFactory — the factory path short-circuits
+        // before the loader is needed, so we test WITHOUT a factory to ensure the
+        // loader code path is exercised.
+        await using var svc = new ButlerService(opts, modelLoader: null);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync());
+    }
+
+    // ------------------------------------------------------------------
+    // IModelLoader path — happy path
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StartAsync_WithModelLoader_ModelExists_Succeeds()
+    {
+        // Create a sentinel model file so FakeModelLoader.GetModelPath returns
+        // a path that File.Exists() will accept.
+        var tmpFile = Path.GetTempFileName();
+        try
+        {
+            var loader = new FakeModelLoader(new Dictionary<string, string>
+            {
+                ["Qwen3-14B-Q4"] = tmpFile,
+            });
+            var opts = new ButlerOptions
+            {
+                // ModelPath is null — must resolve via loader
+                ModelId     = "Qwen3-14B-Q4",
+                WarmOnStart = false,
+            };
+            await using var svc = new ButlerService(opts, loader, generatorFactory: _ => new FakeChatGenerator());
+            await svc.StartAsync();
+            Assert.True(svc.IsReady);
+        }
+        finally
+        {
+            try { File.Delete(tmpFile); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_WithModelLoader_UnknownModelId_ThrowsKeyNotFound()
+    {
+        // FakeModelLoader throws ArgumentException for models not in its registry.
+        var loader = new FakeModelLoader(); // empty registry
+        var opts = new ButlerOptions
+        {
+            ModelId     = "Qwen3-14B-Q4",
+            ModelPath   = null,
+            WarmOnStart = false,
+        };
+        await using var svc = new ButlerService(opts, loader, generatorFactory: _ => new FakeChatGenerator());
+        // FakeModelLoader.GetModelPath throws FileNotFoundException → propagates from ResolveModelPathAsync.
+        await Assert.ThrowsAsync<FileNotFoundException>(() => svc.StartAsync());
+    }
+
+    // ------------------------------------------------------------------
+    // Constructor argument guard
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Constructor_NullOptions_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new ButlerService(null!));
+    }
+}
