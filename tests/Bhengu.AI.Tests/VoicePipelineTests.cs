@@ -273,6 +273,106 @@ public sealed class VoicePipelineTests
         // At least one transcription must have completed; no crashes.
         Assert.True(completedCount >= 1);
     }
+
+    // ------------------------------------------------------------------
+    // Transcriber yields nothing → Transcribed NOT fired
+    //
+    // VoicePipeline.RunActivationAsync: `if (result is not null)`
+    // When ToFinalAsync drains an empty stream it returns null.
+    // Neither Transcribed nor ActivationFailed is raised — only a
+    // Trace.TraceInformation log. This is the "silent audio" path
+    // (empty capture, pure noise, or premature cancellation).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task WakeWord_TranscriberYieldsNothing_TranscribedNotFired()
+    {
+        var wake = new FakeWakeWordDetector();
+        // NullVoiceTranscriber yields no PartialTranscription items.
+        await using var pipeline = new VoicePipeline(wake, new NullVoiceTranscriber());
+
+        var transcribed = false;
+        Exception? failedEx = null;
+        pipeline.Transcribed      += (_, _)  => transcribed = true;
+        pipeline.ActivationFailed += (_, ex) => failedEx    = ex;
+
+        await pipeline.StartAsync();
+        wake.FireWakeWord();
+
+        // Give RunActivationAsync time to complete — NullVoiceTranscriber
+        // drains immediately and yields nothing, so this is near-instant.
+        await Task.Delay(200);
+
+        // Empty stream → ToFinalAsync returns null → result is null →
+        // Transcribed must NOT fire; ActivationFailed must NOT fire.
+        Assert.False(transcribed);
+        Assert.Null(failedEx);
+    }
+
+    // ------------------------------------------------------------------
+    // Transcriber yields only non-final partials → Transcribed fires
+    //
+    // ToFinalAsync iterates all partials; if none has IsFinal=true it
+    // returns the last partial as the result (rather than null).
+    // This documents that the pipeline accepts "no IsFinal=true ever"
+    // as a valid stream end — it always surfaces the last partial seen.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task WakeWord_TranscriberYieldsOnlyNonFinalPartials_TranscribedFiredWithLastText()
+    {
+        var wake        = new FakeWakeWordDetector();
+        var transcriber = new NonFinalOnlyTranscriber("partial result");
+
+        await using var pipeline = new VoicePipeline(wake, transcriber);
+
+        TranscribedEventArgs? received = null;
+        pipeline.Transcribed += (_, e) => received = e;
+
+        await pipeline.StartAsync();
+        wake.FireWakeWord();
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (received is null && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+
+        // The last partial (IsFinal=false) is still converted to a
+        // TranscriptionResult and surfaced via Transcribed.
+        Assert.NotNull(received);
+        Assert.Equal("partial result", received.Result.Text);
+    }
+
+    // ------------------------------------------------------------------
+    // Private helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Transcriber that yields a single <see cref="PartialTranscription"/>
+    /// with <see cref="PartialTranscription.IsFinal"/> = <c>false</c>, then
+    /// ends the stream. Tests that <c>ToFinalAsync</c> returns the last
+    /// partial even when no final token is ever produced.
+    /// </summary>
+    private sealed class NonFinalOnlyTranscriber : IVoiceTranscriber
+    {
+        private readonly string _text;
+        public NonFinalOnlyTranscriber(string text) => _text = text;
+
+        public async IAsyncEnumerable<PartialTranscription> StreamTranscribeAsync(
+            IAsyncEnumerable<ReadOnlyMemory<byte>> audioChunks,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            // Drain the audio stream so the pipeline doesn't block.
+            await foreach (var _ in audioChunks.WithCancellation(ct).ConfigureAwait(false)) { }
+            yield return new PartialTranscription(_text, IsFinal: false, Confidence: 0.6f);
+        }
+
+        public Task<TranscriptionResult> TranscribeAsync(
+            ReadOnlyMemory<byte> pcmAudio,
+            CancellationToken ct = default)
+            => Task.FromResult(new TranscriptionResult(_text, 0.6f, "und"));
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }
 
 // ============================================================================
