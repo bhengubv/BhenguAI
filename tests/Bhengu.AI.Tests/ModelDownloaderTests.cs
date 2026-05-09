@@ -239,7 +239,7 @@ public sealed class ModelDownloaderTests
     }
 
     // -----------------------------------------------------------------------
-    // ownsSources — disposes child sources when requested
+    // ownsSources — ownership semantics for child sources
     // -----------------------------------------------------------------------
 
     [Fact]
@@ -249,6 +249,17 @@ public sealed class ModelDownloaderTests
         var dl = new ModelDownloader(new IModelSource[] { disposable }, ownsSources: true);
         dl.Dispose();
         Assert.True(disposable.Disposed);
+    }
+
+    [Fact]
+    public void Dispose_WithoutOwnsSources_DoesNotDisposeChildren()
+    {
+        // When ownsSources is false the caller retains ownership — Dispose
+        // must not propagate to the source.
+        var disposable = new DisposableModelSource();
+        var dl = new ModelDownloader(new IModelSource[] { disposable }, ownsSources: false);
+        dl.Dispose();
+        Assert.False(disposable.Disposed);
     }
 
     private sealed class DisposableModelSource : IModelSource, IDisposable
