@@ -119,4 +119,51 @@ public sealed class VectorMathTests
 
         Assert.InRange(simd, vm - Epsilon, vm + Epsilon);
     }
+
+    // ------------------------------------------------------------------
+    // Edge cases: zero vectors and negative components
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void VectorMath_AllZeroVector_ReturnsNaN()
+    {
+        // PRODUCTION RISK: if an embedding model returns an all-zero vector
+        // (corrupt inference output), cosine similarity yields NaN (0/0).
+        // Callers must guard against NaN before using the score.
+        float[] zero = { 0f, 0f, 0f };
+        float[] unit = { 1f, 0f, 0f };
+        var result = VectorMath.CosineSimilarity(zero, unit);
+        Assert.True(float.IsNaN(result),
+            "Cosine similarity of a zero vector must be NaN (division by zero norm).");
+    }
+
+    [Fact]
+    public void SimdOps_AllZeroVector_ReturnsNaN()
+    {
+        float[] zero = { 0f, 0f, 0f };
+        float[] unit = { 0f, 1f, 0f };
+        var result = SimdOps.CosineSimilarity(zero, unit);
+        Assert.True(float.IsNaN(result),
+            "Cosine similarity of a zero vector must be NaN (division by zero norm).");
+    }
+
+    [Fact]
+    public void VectorMath_NegativeComponents_WorksCorrectly()
+    {
+        // Cosine similarity handles negative components correctly via dot product.
+        float[] a = { 1f, -1f };
+        float[] b = { -1f, 1f };
+        // These are anti-parallel → similarity = -1.
+        var result = VectorMath.CosineSimilarity(a, b);
+        Assert.Equal(-1f, result, precision: 4);
+    }
+
+    [Fact]
+    public void SimdOps_NegativeComponents_WorksCorrectly()
+    {
+        float[] a = { 1f, -1f };
+        float[] b = { -1f, 1f };
+        var result = SimdOps.CosineSimilarity(a, b);
+        Assert.Equal(-1f, result, precision: 4);
+    }
 }
