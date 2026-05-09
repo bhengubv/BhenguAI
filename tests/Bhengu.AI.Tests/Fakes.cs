@@ -250,10 +250,12 @@ internal sealed class FakeWakeWordDetector : IWakeWordDetector
 internal sealed class FakeVoiceTranscriber : IVoiceTranscriber
 {
     private readonly TranscriptionResult _result;
+    private readonly bool _shouldThrow;
 
-    public FakeVoiceTranscriber(string text = "test transcription")
+    public FakeVoiceTranscriber(string text = "test transcription", bool shouldThrow = false)
     {
         _result = new TranscriptionResult(text, 0.95f, "en");
+        _shouldThrow = shouldThrow;
     }
 
     public int TranscribeCallCount { get; private set; }
@@ -265,6 +267,8 @@ internal sealed class FakeVoiceTranscriber : IVoiceTranscriber
         TranscribeCallCount++;
         // Drain the audio stream
         await foreach (var _ in audioChunks.WithCancellation(ct).ConfigureAwait(false)) { }
+        if (_shouldThrow)
+            throw new InvalidOperationException("Simulated transcriber failure");
         // PartialTranscription(Text, IsFinal, Confidence)
         yield return new PartialTranscription(_result.Text, true, _result.Confidence);
     }

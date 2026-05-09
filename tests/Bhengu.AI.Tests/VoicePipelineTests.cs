@@ -160,4 +160,87 @@ public sealed class VoicePipelineTests
 
         Assert.False(triggered);
     }
+
+    // ------------------------------------------------------------------
+    // Dispose guards on StartAsync / StopAsync
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StartAsync_AfterDispose_Throws()
+    {
+        var pipeline = new VoicePipeline(
+            new FakeWakeWordDetector(),
+            new FakeVoiceTranscriber());
+
+        await pipeline.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => pipeline.StartAsync());
+    }
+
+    [Fact]
+    public async Task StopAsync_AfterDispose_Throws()
+    {
+        var pipeline = new VoicePipeline(
+            new FakeWakeWordDetector(),
+            new FakeVoiceTranscriber());
+
+        await pipeline.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => pipeline.StopAsync());
+    }
+
+    [Fact]
+    public async Task StopAsync_BeforeStart_IsNoOp()
+    {
+        // StopAsync before StartAsync is allowed; it just cancels any in-flight
+        // activation (there is none) and delegates to the wake detector.
+        await using var pipeline = new VoicePipeline(
+            new FakeWakeWordDetector(),
+            new FakeVoiceTranscriber());
+
+        var ex = await Record.ExceptionAsync(() => pipeline.StopAsync());
+        Assert.Null(ex);
+    }
+
+    // ------------------------------------------------------------------
+    // ActivationFailed event
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ActivationFailed_Event_FiredWhenTranscriberThrows()
+    {
+        var wake        = new FakeWakeWordDetector();
+        var transcriber = new FakeVoiceTranscriber(shouldThrow: true);
+
+        await using var pipeline = new VoicePipeline(wake, transcriber);
+
+        Exception? caught = null;
+        pipeline.ActivationFailed += (_, ex) => caught = ex;
+
+        await pipeline.StartAsync();
+        wake.FireWakeWord();
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (caught is null && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+
+        Assert.NotNull(caught);
+        Assert.IsType<InvalidOperationException>(caught);
+    }
+
+    // ------------------------------------------------------------------
+    // DisposeAsync idempotency
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task DisposeAsync_IsIdempotent()
+    {
+        var pipeline = new VoicePipeline(
+            new FakeWakeWordDetector(),
+            new FakeVoiceTranscriber());
+
+        await pipeline.DisposeAsync();
+        var ex = await Record.ExceptionAsync(pipeline.DisposeAsync().AsTask);
+        Assert.Null(ex);
+    }
 }
