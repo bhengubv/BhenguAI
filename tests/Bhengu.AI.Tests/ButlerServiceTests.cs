@@ -405,6 +405,67 @@ public sealed class ButlerServiceTests : IDisposable
         Assert.False(result.Success);
     }
 
+    [Fact]
+    public async Task ChatAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var svc = BuildService();
+        await svc.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            svc.ChatAsync(new[] { new ChatMessage("user", "hi") }));
+    }
+
+    [Fact]
+    public async Task StreamAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var svc = BuildService();
+        await svc.DisposeAsync();
+
+        await Assert.ThrowsAnyAsync<ObjectDisposedException>(async () =>
+        {
+            await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "hi") })) { }
+        });
+    }
+
+    [Fact]
+    public async Task InvokeToolAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var svc = BuildService(toolBridge: new FakeToolBridge());
+        await svc.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            svc.InvokeToolAsync(new ToolInvocation
+            {
+                ToolName  = "tgn.sdpkt.get_balance",
+                Arguments = new Dictionary<string, object?>(),
+            }));
+    }
+
+    [Fact]
+    public async Task InvokeToolAsync_BridgeReturnsFailure_ForwardsFailureResult()
+    {
+        // The service must forward the bridge's failure result transparently —
+        // failure is a valid ToolResult, not an exception.
+        var failResult = new ToolResult
+        {
+            ToolName = "tgn.sdpkt.send_payment",
+            Success  = false,
+            Error    = "Insufficient funds.",
+        };
+        var bridge = new FakeToolBridge(failResult);
+        await using var svc = BuildService(toolBridge: bridge);
+        await svc.StartAsync();
+
+        var result = await svc.InvokeToolAsync(new ToolInvocation
+        {
+            ToolName  = "tgn.sdpkt.send_payment",
+            Arguments = new Dictionary<string, object?>(),
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal("Insufficient funds.", result.Error);
+    }
+
     // ------------------------------------------------------------------
     // WarmOnStart
     // ------------------------------------------------------------------
