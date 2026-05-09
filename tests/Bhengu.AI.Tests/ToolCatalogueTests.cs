@@ -172,6 +172,131 @@ public sealed class ToolCatalogueTests
             () => ToolManifestGenerator.GenerateMarkdownManifest(null!));
     }
 
+    [Fact]
+    public void GenerateMarkdownManifest_NoParamTool_ProducesNoParametersPlaceholder()
+    {
+        var tools = new[]
+        {
+            new ToolDefinition
+            {
+                Name               = "tgn.auth.request_otp",
+                Description        = "Request an OTP.",
+                Parameters         = new Dictionary<string, ToolParameter>(),
+                RequiredParameters = Array.Empty<string>(),
+            }
+        };
+
+        var md = ToolManifestGenerator.GenerateMarkdownManifest(tools);
+        Assert.Contains("_No parameters._", md, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GenerateMarkdownManifest_PipeInDescription_IsEscaped()
+    {
+        // Pipe characters in parameter descriptions must be escaped so they
+        // don't break the Markdown table.
+        var tools = new[]
+        {
+            new ToolDefinition
+            {
+                Name               = "tgn.test.pipe_test",
+                Description        = "A tool.",
+                Parameters         = new Dictionary<string, ToolParameter>
+                {
+                    ["side"] = new() { Type = "string", Description = "left|right|center" },
+                },
+                RequiredParameters = new[] { "side" },
+            }
+        };
+
+        var md = ToolManifestGenerator.GenerateMarkdownManifest(tools);
+        Assert.Contains("left\\|right\\|center", md, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GenerateJsonManifest_EnumParameter_IncludedInOutput()
+    {
+        // ToolParameters with Enum values must propagate into the JSON manifest
+        // so the LLM knows which values are allowed.
+        var tools = new[]
+        {
+            new ToolDefinition
+            {
+                Name               = "tgn.test.enum_param",
+                Description        = "Enum test.",
+                Parameters         = new Dictionary<string, ToolParameter>
+                {
+                    ["direction"] = new()
+                    {
+                        Type        = "string",
+                        Description = "Direction.",
+                        Enum        = new[] { "north", "south" },
+                    },
+                },
+                RequiredParameters = new[] { "direction" },
+            }
+        };
+
+        var json = ToolManifestGenerator.GenerateJsonManifest(tools);
+        Assert.Contains("north",  json, StringComparison.Ordinal);
+        Assert.Contains("south",  json, StringComparison.Ordinal);
+        Assert.Contains("\"enum\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GenerateJsonManifest_NoEnumParameter_OmitsEnumKey()
+    {
+        // Parameters WITHOUT enum values must NOT emit an "enum" key
+        // (WhenWritingNull is configured; the key should be absent entirely).
+        var tools = new[]
+        {
+            new ToolDefinition
+            {
+                Name               = "tgn.test.no_enum",
+                Description        = "No enum.",
+                Parameters         = new Dictionary<string, ToolParameter>
+                {
+                    ["text"] = new() { Type = "string", Description = "free text" },
+                },
+                RequiredParameters = Array.Empty<string>(),
+            }
+        };
+
+        var json = ToolManifestGenerator.GenerateJsonManifest(tools);
+        Assert.DoesNotContain("\"enum\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GenerateMarkdownManifest_ToolsGroupedByApiSlug()
+    {
+        // Tools with the same tgn.<api> prefix should be grouped under
+        // the same "## tgn.<api>" heading.
+        var tools = new[]
+        {
+            new ToolDefinition
+            {
+                Name               = "tgn.sdpkt.get_balance",
+                Description        = "Get balance.",
+                Parameters         = new Dictionary<string, ToolParameter>(),
+                RequiredParameters = Array.Empty<string>(),
+            },
+            new ToolDefinition
+            {
+                Name               = "tgn.sdpkt.send_payment",
+                Description        = "Send payment.",
+                Parameters         = new Dictionary<string, ToolParameter>(),
+                RequiredParameters = Array.Empty<string>(),
+            },
+        };
+
+        var md = ToolManifestGenerator.GenerateMarkdownManifest(tools);
+        // Both tools share the "tgn.sdpkt" group heading.
+        Assert.Contains("## tgn.sdpkt", md, StringComparison.Ordinal);
+        // The heading appears exactly once (not once per tool).
+        var headingCount = md.Split(new[] { "## tgn.sdpkt" }, StringSplitOptions.None).Length - 1;
+        Assert.Equal(1, headingCount);
+    }
+
     // ------------------------------------------------------------------
     // HttpToolBridge — unregistered tool returns failure gracefully
     // ------------------------------------------------------------------
