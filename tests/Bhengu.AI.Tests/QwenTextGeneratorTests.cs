@@ -240,6 +240,38 @@ public sealed class QwenTextGeneratorTests
     }
 
     [Fact]
+    public void TryDrainUtf8_TwoCallsWithSplitMultibyteSequence_DecodesCorrectly()
+    {
+        // This is the real production pattern in RunGeneration:
+        //   token N   → llama_cpp writes 0xC3 into the pending buffer
+        //               (first byte of UTF-8 'é' = U+00E9)
+        //   Call 1    → buffer = { 0xC3 } → incomplete → returns false, byte stays
+        //   token N+1 → llama_cpp appends 0xA9
+        //   Call 2    → buffer = { 0xC3, 0xA9 } → complete → returns true, "é"
+        //
+        // Validates the STATEFUL incremental decode contract that
+        // QwenTextGenerator.TryDrainUtf8 maintains across invocations.
+
+        var pending = new List<byte> { 0xC3 };
+
+        // Call 1: incomplete — 0xC3 is the lead byte of a 2-byte sequence.
+        var result1 = QwenTextGenerator.TryDrainUtf8(pending, out var decoded1);
+        Assert.False(result1);               // not yet decodable
+        Assert.Equal(string.Empty, decoded1);
+        Assert.Single(pending);              // 0xC3 must stay buffered
+        Assert.Equal(0xC3, pending[0]);
+
+        // Simulate the next token completing the sequence.
+        pending.Add(0xA9);
+
+        // Call 2: the buffer now holds { 0xC3, 0xA9 } = 'é'
+        var result2 = QwenTextGenerator.TryDrainUtf8(pending, out var decoded2);
+        Assert.True(result2);
+        Assert.Equal("é", decoded2);
+        Assert.Empty(pending);               // fully consumed — nothing left
+    }
+
+    [Fact]
     public void TryDrainUtf8_Complete3ByteSequence_Decodes()
     {
         // '中' = U+4E2D, UTF-8: 0xE4 0xB8 0xAD
