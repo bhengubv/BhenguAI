@@ -160,4 +160,36 @@ public sealed class LocalModelLoaderTests : IDisposable
         var result = await loader.CheckForCriticalUpdateAsync();
         Assert.IsType<bool>(result); // just ensure no exception
     }
+
+    // ------------------------------------------------------------------
+    // Constructor creates the model directory when it does not exist
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Constructor_NonExistentDirectory_CreatesIt()
+    {
+        // Pass a sub-path that has never been created; the constructor must
+        // call Directory.CreateDirectory and produce a real directory.
+        var newSubDir = Path.Combine(_tempDir, "auto_created_by_ctor");
+        Assert.False(Directory.Exists(newSubDir));
+
+        using var loader = new LocalModelLoader(newSubDir);
+
+        Assert.True(Directory.Exists(newSubDir));
+    }
+
+    // ------------------------------------------------------------------
+    // GetModelPath returns the expected path even when file is absent
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void GetModelPath_KnownModelFileAbsent_PathIsInsideModelDir()
+    {
+        // The path is the expected on-disk location, not a live-file check.
+        // File absence must not cause GetModelPath to throw or return empty.
+        using var loader = new LocalModelLoader(_tempDir);
+        var path = loader.GetModelPath("Qwen3-14B-Q4");
+        Assert.False(string.IsNullOrWhiteSpace(path));
+        Assert.StartsWith(_tempDir, path, StringComparison.OrdinalIgnoreCase);
+    }
 }

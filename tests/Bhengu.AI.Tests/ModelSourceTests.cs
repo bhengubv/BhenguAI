@@ -179,3 +179,70 @@ public sealed class ModelSourceTests
             src.DownloadAsync(url, "/tmp/x"));
     }
 }
+
+// =========================================================================
+// ownsClient semantics — injected HttpClient must NOT be disposed by source
+// =========================================================================
+
+public sealed class ModelSourceOwnershipTests
+{
+    /// <summary>
+    /// Message handler that tracks whether <see cref="Dispose"/> was called.
+    /// </summary>
+    private sealed class TrackingHandler : HttpMessageHandler
+    {
+        public bool Disposed { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken ct)
+            => throw new NotImplementedException("not used in disposal tests");
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) Disposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    [Fact]
+    public void HuggingFaceSource_InjectedClient_IsNotDisposedOnSourceDispose()
+    {
+        // When an HttpClient is injected (ownsClient=false) the source must
+        // never dispose it — the caller retains ownership.
+        var handler = new TrackingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var src = new HuggingFaceSource(http);
+        src.Dispose();
+        Assert.False(handler.Disposed,
+            "HuggingFaceSource must not dispose an injected HttpClient.");
+    }
+
+    [Fact]
+    public void ModelScopeSource_InjectedClient_IsNotDisposedOnSourceDispose()
+    {
+        var handler = new TrackingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var src = new ModelScopeSource(http);
+        src.Dispose();
+        Assert.False(handler.Disposed,
+            "ModelScopeSource must not dispose an injected HttpClient.");
+    }
+
+    [Fact]
+    public async Task HuggingFaceSource_OwnedClient_IsAvailableAsync_AfterDispose_ReturnsFalse()
+    {
+        // Sanity check that the _disposed guard short-circuits IsAvailableAsync
+        // when the source created and owns its own client.
+        var src = new HuggingFaceSource();   // ownsClient = true
+        src.Dispose();
+        Assert.False(await src.IsAvailableAsync());
+    }
+
+    [Fact]
+    public async Task ModelScopeSource_OwnedClient_IsAvailableAsync_AfterDispose_ReturnsFalse()
+    {
+        var src = new ModelScopeSource();    // ownsClient = true
+        src.Dispose();
+        Assert.False(await src.IsAvailableAsync());
+    }
+}
