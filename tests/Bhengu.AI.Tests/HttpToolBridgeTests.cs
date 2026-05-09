@@ -155,4 +155,55 @@ public sealed class HttpToolBridgeInvokeTests
         Assert.NotNull(result);
         Assert.Equal(toolName, result.ToolName);
     }
+
+    // ------------------------------------------------------------------
+    // Missing required path placeholder → failure result, not exception
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task InvokeAsync_MissingRequiredPathArg_ReturnsFailureNotException()
+    {
+        // tgn.bidbaas.get_auction_details uses path template
+        //   bidbaas/v1/auctions/{auction_id}
+        // When auction_id is absent, ResolveUrl throws InvalidOperationException.
+        // That exception is caught internally and returned as a ToolResult failure
+        // — it must NEVER propagate to the caller.
+        var bridge = new HttpToolBridge("https://api.thegeek.co.za/", SharedHttp);
+
+        var result = await bridge.InvokeAsync(new ToolInvocation
+        {
+            ToolName  = "tgn.bidbaas.get_auction_details",
+            Arguments = new Dictionary<string, object?>(), // auction_id intentionally absent
+        });
+
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        // ResolveUrl error: "required to build URL"
+        Assert.Contains("required", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ------------------------------------------------------------------
+    // Pre-cancelled token → OperationCanceledException is re-thrown
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task InvokeAsync_PreCancelledToken_RethrowsOperationCanceledException()
+    {
+        // Contract (from the source): `catch (OperationCanceledException) { throw; }`
+        // — OCE must NEVER be swallowed by the bridge.
+        //
+        // Use tgn.sdpkt.get_balance (no path placeholders) so URL building succeeds
+        // and SendAsync is reached, where the pre-cancelled token fires.
+        var bridge = new HttpToolBridge("https://api.thegeek.co.za/", SharedHttp);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            bridge.InvokeAsync(new ToolInvocation
+            {
+                ToolName  = "tgn.sdpkt.get_balance",
+                Arguments = new Dictionary<string, object?>(),
+            }, cts.Token));
+    }
 }
