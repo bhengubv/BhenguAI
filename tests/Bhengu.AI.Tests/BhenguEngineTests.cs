@@ -103,4 +103,41 @@ public sealed class BhenguEngineTests
 
         Assert.Same(second, engine.GetModule<FakeModule>());
     }
+
+    // ------------------------------------------------------------------
+    // Interface vs concrete key distinction
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RegisterByInterfaceType_GetByInterfaceType_RoundTrips()
+    {
+        // Modules can be registered and retrieved under an interface key,
+        // enabling callers to program against the interface, not the class.
+        var engine = BuildEngine();
+        var module = new FakeModule();
+
+        engine.RegisterModule<IBhenguModule>(module);
+
+        Assert.Same(module, engine.GetModule<IBhenguModule>());
+    }
+
+    [Fact]
+    public void HasModule_RegisteredViaInterfaceKey_ReturnsTrue()
+    {
+        var engine = BuildEngine();
+        engine.RegisterModule<IBhenguModule>(new FakeModule());
+        Assert.True(engine.HasModule<IBhenguModule>());
+    }
+
+    [Fact]
+    public void RegisterByConcreteType_GetByInterfaceKey_ReturnsNull()
+    {
+        // The key is exact type — registering under FakeModule (concrete)
+        // and querying under IBhenguModule (interface) must miss.
+        var engine = BuildEngine();
+        engine.RegisterModule(new FakeModule());      // key = FakeModule
+
+        Assert.Null(engine.GetModule<IBhenguModule>()); // key = IBhenguModule → miss
+        Assert.False(engine.HasModule<IBhenguModule>());
+    }
 }

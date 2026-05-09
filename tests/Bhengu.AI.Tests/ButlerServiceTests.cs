@@ -1039,3 +1039,130 @@ public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
         Assert.Null(ex);
     }
 }
+
+// ============================================================================
+// ButlerService — lifecycle contract: IsReady, restart-observer counts,
+// concurrent-start serialisation
+// ============================================================================
+
+public sealed class ButlerServiceLifecycleContractTests : IDisposable
+{
+    private readonly string _modelPath = Path.GetTempFileName();
+
+    public void Dispose()
+    {
+        try { File.Delete(_modelPath); } catch { /* best-effort */ }
+    }
+
+    // -----------------------------------------------------------------------
+    // IsReady property contract
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task DisposeAsync_SetsIsReadyFalse()
+    {
+        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        var svc  = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await svc.StartAsync();
+        Assert.True(svc.IsReady);
+
+        await svc.DisposeAsync();
+
+        // IsReady is defined as `_started && _generator != null && !_disposed`.
+        // DisposeAsync sets _disposed = true → IsReady must flip to false.
+        Assert.False(svc.IsReady);
+    }
+
+    // -----------------------------------------------------------------------
+    // Observer event counts across restart cycles
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task RestartCycle_ObserverStartedStoppedCounts_MatchCycle()
+    {
+        // After Start → Stop → Start the observer receives exactly:
+        //   OnStartedAsync × 2, OnStoppedAsync × 1
+        var observer = new FakeButlerObserver();
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            Observer     = observer,
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+
+        await svc.StartAsync();  // started: 1, stopped: 0
+        await svc.StopAsync();   // started: 1, stopped: 1
+        await svc.StartAsync();  // started: 2, stopped: 1
+
+        Assert.Equal(2, observer.StartedCount);
+        Assert.Equal(1, observer.StoppedCount);
+        Assert.True(svc.IsReady);
+    }
+
+    [Fact]
+    public async Task StartAsync_Idempotent_ObserverCalledOnlyOnce()
+    {
+        // A second StartAsync when already started must NOT fire OnStartedAsync again —
+        // the early-return guard `if (_started) return` prevents re-entry.
+        var observer = new FakeButlerObserver();
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            Observer     = observer,
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+
+        await svc.StartAsync();
+        await svc.StartAsync(); // idempotent — observer must not fire again
+
+        Assert.Equal(1, observer.StartedCount);
+    }
+
+    // -----------------------------------------------------------------------
+    // Concurrent StartAsync — semaphore serialisation
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task ConcurrentStartAsync_OnlyOneGeneratorCreated()
+    {
+        // The SemaphoreSlim(_startGate) serialises concurrent StartAsync calls so
+        // the generator factory is invoked exactly once even under a race.
+        var factoryCallCount = 0;
+        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new ButlerService(opts, generatorFactory: _ =>
+        {
+            Interlocked.Increment(ref factoryCallCount);
+            return new FakeChatGenerator();
+        });
+
+        // Two concurrent starts — only one should "win" past the `if (_started) return` check.
+        await Task.WhenAll(
+            Task.Run(() => svc.StartAsync()),
+            Task.Run(() => svc.StartAsync()));
+
+        Assert.Equal(1, factoryCallCount);
+        Assert.True(svc.IsReady);
+    }
+
+    // -----------------------------------------------------------------------
+    // RestartCycle — service produces correct output after restart
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task RestartCycle_ChatAsync_WorksCorrectlyAfterThreeRestarts()
+    {
+        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator("ok"));
+
+        for (var i = 0; i < 3; i++)
+        {
+            await svc.StartAsync();
+            var result = await svc.ChatAsync(new[] { new ChatMessage("user", "ping") });
+            Assert.Equal("ok", result);
+            await svc.StopAsync();
+            Assert.False(svc.IsReady);
+        }
+    }
+}

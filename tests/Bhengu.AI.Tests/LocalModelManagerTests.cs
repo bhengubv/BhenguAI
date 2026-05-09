@@ -144,6 +144,55 @@ public sealed class LocalModelManagerTests : IDisposable
     }
 
     // -----------------------------------------------------------------------
+    // GetModelPathAsync — model already present (no download)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetModelPathAsync_ModelPresentWithPytorchBin_SkipsDownload()
+    {
+        // Contract: if the model directory already contains pytorch_model.bin,
+        // DownloadModelAsync is NOT called (no re-download unless forced).
+        var dl  = new FakeModelDownloader();
+        var dir = Path.Combine(_tempDir, "present_model");
+        Directory.CreateDirectory(dir);
+
+        var modelDir = Path.Combine(dir, "mymodel");
+        Directory.CreateDirectory(modelDir);
+        File.WriteAllBytes(Path.Combine(modelDir, "pytorch_model.bin"), new byte[16]);
+
+        using var mgr = new LocalModelManager(dl, dir);
+        var path = await mgr.GetModelPathAsync("mymodel");
+
+        Assert.Equal(0,         dl.DownloadCallCount);
+        Assert.Equal(modelDir,  path, StringComparer.OrdinalIgnoreCase);
+    }
+
+    // -----------------------------------------------------------------------
+    // GetModelPathAsync — checksum verification failure
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetModelPathAsync_WithWrongChecksum_ThrowsInvalidDataException()
+    {
+        // When expectedChecksum is supplied and doesn't match the file's SHA-256,
+        // GetModelPathAsync must throw InvalidDataException to signal corruption.
+        var dl  = new FakeModelDownloader();
+        var dir = Path.Combine(_tempDir, "chksum");
+        Directory.CreateDirectory(dir);
+
+        var modelDir = Path.Combine(dir, "model_c");
+        Directory.CreateDirectory(modelDir);
+        File.WriteAllBytes(Path.Combine(modelDir, "pytorch_model.bin"), new byte[] { 1, 2, 3 });
+
+        using var mgr = new LocalModelManager(dl, dir);
+        // 32 bytes of zeros is never the real SHA-256 of {1,2,3}.
+        var wrongChecksum = new byte[32];
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            mgr.GetModelPathAsync("model_c", expectedChecksum: wrongChecksum));
+    }
+
+    // -----------------------------------------------------------------------
     // Dispose idempotency
     // -----------------------------------------------------------------------
 
