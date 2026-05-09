@@ -912,6 +912,32 @@ public sealed class ButlerServicePathResolutionTests
     }
 
     // ------------------------------------------------------------------
+    // GeneratorFactory returns null — explicit null guard
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StartAsync_GeneratorFactoryReturnsNull_ThrowsInvalidOperation()
+    {
+        // ButlerService guards: if generatorFactory(modelPath) returns null,
+        // StartAsync must throw InvalidOperationException, not NullReferenceException.
+        var opts = new ButlerOptions
+        {
+            ModelPath   = Path.GetTempFileName(),
+            WarmOnStart = false,
+        };
+        var tmpPath = opts.ModelPath!;
+        try
+        {
+            await using var svc = new ButlerService(opts, generatorFactory: _ => null!);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync());
+        }
+        finally
+        {
+            try { File.Delete(tmpPath); } catch { /* best-effort */ }
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Constructor argument guard
     // ------------------------------------------------------------------
 
