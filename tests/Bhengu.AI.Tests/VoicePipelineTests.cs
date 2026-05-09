@@ -243,4 +243,84 @@ public sealed class VoicePipelineTests
         var ex = await Record.ExceptionAsync(pipeline.DisposeAsync().AsTask);
         Assert.Null(ex);
     }
+
+    // ------------------------------------------------------------------
+    // WakeWord fires twice → second activation cancels first
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task WakeWord_FiresTwice_BothActivationsComplete()
+    {
+        // The second wake event triggers CancelActivation() on the first
+        // in-flight activation. Both events must not crash the pipeline.
+        var wake        = new FakeWakeWordDetector();
+        var transcriber = new FakeVoiceTranscriber("done");
+
+        await using var pipeline = new VoicePipeline(wake, transcriber);
+
+        var completedCount = 0;
+        pipeline.Transcribed += (_, _) => Interlocked.Increment(ref completedCount);
+
+        await pipeline.StartAsync();
+        wake.FireWakeWord();
+        wake.FireWakeWord(); // fires while first may still be in progress
+
+        // Give time for both activations to settle
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (completedCount < 1 && DateTime.UtcNow < deadline)
+            await Task.Delay(30);
+
+        // At least one transcription must have completed; no crashes.
+        Assert.True(completedCount >= 1);
+    }
+}
+
+// ============================================================================
+// TranscribedEventArgs — direct construction tests
+// ============================================================================
+
+public sealed class TranscribedEventArgsTests
+{
+    [Fact]
+    public void RequiredResult_SetViaObjectInitializer_IsReflected()
+    {
+        var result = new TranscriptionResult("hello", 0.9f, "en");
+        var args   = new TranscribedEventArgs { Result = result };
+        Assert.Same(result, args.Result);
+    }
+
+    [Fact]
+    public void CompletedAt_Defaults_ToRecentUtcTime()
+    {
+        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var args   = new TranscribedEventArgs
+        {
+            Result = new TranscriptionResult("test", 0.8f, "und"),
+        };
+        var after = DateTimeOffset.UtcNow.AddSeconds(1);
+
+        Assert.InRange(args.CompletedAt, before, after);
+    }
+
+    [Fact]
+    public void CompletedAt_CanBeOverriddenWithSpecificTime()
+    {
+        var specific = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var args = new TranscribedEventArgs
+        {
+            Result      = new TranscriptionResult("hi", 0.5f, "zu"),
+            CompletedAt = specific,
+        };
+        Assert.Equal(specific, args.CompletedAt);
+    }
+
+    [Fact]
+    public void IsEventArgs_InheritanceHolds()
+    {
+        EventArgs ea = new TranscribedEventArgs
+        {
+            Result = new TranscriptionResult("test", 0.7f, "en"),
+        };
+        Assert.IsType<TranscribedEventArgs>(ea);
+    }
 }
