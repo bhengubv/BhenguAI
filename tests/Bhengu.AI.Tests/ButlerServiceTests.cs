@@ -1568,3 +1568,197 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
         public void Dispose() { }
     }
 }
+
+// ============================================================================
+// ButlerService — StreamAsync behavioral contracts not covered elsewhere
+//
+// Four gaps identified after full audit:
+//   1. Caller-supplied GenerationOptions must override service defaults in
+//      StreamAsync (ChatAsync already has this test; StreamAsync did not).
+//   2. OnStreamStartedAsync and OnStreamCompletedAsync for a single call
+//      must share the same CorrelationId (analytics / billing contract).
+//   3. StopAsync while StreamAsync is blocked must cancel the stream via
+//      the linked _shutdownCts (the ChatAsync analog already exists).
+//   4. When OperationCanceledException escapes the underlying stream the
+//      async iterator short-circuits before OnStreamCompletedAsync fires
+//      — observers must NOT assume the Completed event is always delivered.
+// ============================================================================
+
+public sealed class ButlerServiceStreamContractTests : IDisposable
+{
+    private readonly string _modelPath = Path.GetTempFileName();
+
+    public void Dispose()
+    {
+        try { File.Delete(_modelPath); } catch { /* best-effort */ }
+    }
+
+    // ------------------------------------------------------------------
+    // 1. Caller-supplied GenerationOptions override the service default
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StreamAsync_CallerSuppliedOptions_OverrideDefaults()
+    {
+        var defaultOpts = new GenerationOptions { MaxTokens = 128, Temperature = 0.1f };
+        var callerOpts  = new GenerationOptions { MaxTokens = 512, Temperature = 0.9f };
+        var generator   = new FakeChatGenerator("r", streamChunks: new[] { "r" });
+        var butlerOpts  = new ButlerOptions
+        {
+            ModelPath                = _modelPath,
+            WarmOnStart              = false,
+            DefaultGenerationOptions = defaultOpts,
+        };
+        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        await foreach (var _ in svc.StreamAsync(
+            new[] { new ChatMessage("user", "hi") }, callerOpts)) { }
+
+        // Caller-supplied options must win; service default must NOT be used.
+        Assert.Same(callerOpts,    generator.LastStreamOptions);
+        Assert.NotSame(defaultOpts, generator.LastStreamOptions);
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Both stream observer events carry the same correlationId
+    //
+    // ButlerService assigns one Guid.NewGuid() per StreamAsync call and
+    // passes it to both OnStreamStartedAsync and OnStreamCompletedAsync.
+    // Downstream analytics/billing systems rely on this to join the two
+    // events — they must never see mismatched IDs.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StreamAsync_StartedAndCompletedEvents_ShareCorrelationId()
+    {
+        var observer = new FakeButlerObserver();
+        var opts = new ButlerOptions
+        {
+            ModelPath   = _modelPath,
+            WarmOnStart = false,
+            Observer    = observer,
+        };
+        await using var svc = new ButlerService(opts,
+            generatorFactory: _ => new FakeChatGenerator("r", new[] { "a", "b" }));
+        await svc.StartAsync();
+
+        await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "q") })) { }
+
+        Assert.NotNull(observer.LastStreamStartedEvent);
+        Assert.NotNull(observer.LastStreamCompletedEvent);
+
+        // Neither ID may be Guid.Empty, and they must be equal.
+        Assert.NotEqual(Guid.Empty, observer.LastStreamStartedEvent!.CorrelationId);
+        Assert.NotEqual(Guid.Empty, observer.LastStreamCompletedEvent!.CorrelationId);
+        Assert.Equal(
+            observer.LastStreamStartedEvent.CorrelationId,
+            observer.LastStreamCompletedEvent.CorrelationId);
+    }
+
+    // ------------------------------------------------------------------
+    // 3. StopAsync cancels an in-flight StreamAsync
+    //
+    // When StopAsync fires while StreamAsync is blocked inside the generator,
+    // _shutdownCts is cancelled via the linked token, which makes the
+    // channel-based async iterator propagate OperationCanceledException.
+    // The stream consumer must receive OCE, not hang indefinitely.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StopAsync_WhileStreamAsyncBlocking_CancelsPendingStream()
+    {
+        var butlerOpts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new ButlerService(butlerOpts,
+            generatorFactory: _ => new InfiniteBlockingStreamGenerator());
+
+        await svc.StartAsync();
+
+        // Start consuming — the generator blocks until its token is cancelled.
+        var streamTask = Task.Run(async () =>
+        {
+            await foreach (var _ in svc.StreamAsync(
+                new[] { new ChatMessage("user", "hi") })) { }
+        });
+
+        // Give the generator a moment to enter its blocking delay.
+        await Task.Delay(50);
+
+        // StopAsync cancels _shutdownCts → linked token fires → OCE propagates.
+        await svc.StopAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
+    }
+
+    // ------------------------------------------------------------------
+    // 4. OnStreamCompletedAsync is NOT fired when the stream is cancelled
+    //
+    // The ButlerService.StreamAsync async iterator has no try/finally around
+    // OnStreamCompletedAsync — when OCE escapes the `await foreach` the
+    // iterator simply unwinds without reaching the Completed call.
+    // Observers must NOT assume Completed always balances Started.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StreamAsync_CancelledMidStream_CompletedEventNotFired()
+    {
+        var observer = new FakeButlerObserver();
+        var opts = new ButlerOptions
+        {
+            ModelPath   = _modelPath,
+            WarmOnStart = false,
+            Observer    = observer,
+        };
+        await using var svc = new ButlerService(opts,
+            generatorFactory: _ => new InfiniteBlockingStreamGenerator());
+        await svc.StartAsync();
+
+        using var cts = new CancellationTokenSource();
+
+        var streamTask = Task.Run(async () =>
+        {
+            await foreach (var _ in svc.StreamAsync(
+                new[] { new ChatMessage("user", "hi") }, ct: cts.Token)) { }
+        });
+
+        // Give the stream time to enter the blocking wait inside the generator.
+        await Task.Delay(50);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
+
+        // OCE short-circuits the iterator before OnStreamCompletedAsync fires.
+        Assert.Equal(0, observer.StreamCompletedCount);
+    }
+
+    // ------------------------------------------------------------------
+    // Private helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Generator whose <see cref="IChatGenerator.StreamAsync"/> blocks
+    /// indefinitely until the cancellation token fires. Used to verify
+    /// that StopAsync (or an explicit cancel) propagates through the
+    /// linked CancellationTokenSource into the stream consumer.
+    /// </summary>
+    private sealed class InfiniteBlockingStreamGenerator : IChatGenerator
+    {
+        public Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+            => Task.FromResult("ok");
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.Infinite, ct); // blocks until ct is cancelled
+            yield break;
+        }
+
+        public void Dispose() { }
+    }
+}

@@ -157,6 +157,7 @@ internal sealed class FakeButlerObserver : IButlerObserver
     public int ToolInvokedCount { get; private set; }
 
     public ButlerChatEvent? LastChatEvent { get; private set; }
+    public ButlerStreamEvent? LastStreamStartedEvent { get; private set; }
     public ButlerStreamEvent? LastStreamCompletedEvent { get; private set; }
     public ButlerToolEvent? LastToolEvent { get; private set; }
 
@@ -186,6 +187,7 @@ internal sealed class FakeButlerObserver : IButlerObserver
     public ValueTask OnStreamStartedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
     {
         StreamStartedCount++;
+        LastStreamStartedEvent = @event;
         return ValueTask.CompletedTask;
     }
 
