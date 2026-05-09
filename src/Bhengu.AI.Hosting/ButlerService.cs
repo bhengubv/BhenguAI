@@ -318,6 +318,15 @@ public sealed class ButlerService : IButlerService
             // Swallow — DisposeAsync must not throw.
         }
 
+        // StopAsync guards with `if (_disposed) return` (which is true by now),
+        // so it returns before it can dispose _generator.  We must do it here to
+        // release native llama.cpp handles and avoid a resource leak.
+        if (_generator is IAsyncDisposable adisp)
+            try { await adisp.DisposeAsync().ConfigureAwait(false); } catch { /* swallow */ }
+        else
+            try { _generator?.Dispose(); } catch { /* swallow */ }
+        _generator = null;
+
         _shutdownCts.Dispose();
         _startGate.Dispose();
     }
