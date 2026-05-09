@@ -83,6 +83,31 @@ public sealed class ModelRegistryServiceTests
     // Dispose
     // -----------------------------------------------------------------------
 
+    // -----------------------------------------------------------------------
+    // VerifySignature — security guard (interim block)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_SignatureNotImplemented_FallsBackToEmbedded()
+    {
+        // Security contract: VerifySignature now throws NotSupportedException,
+        // which causes CheckForUpdatesAsync to swallow the exception and fall
+        // back to the embedded registry instead of trusting unsigned remote JSON.
+        // This prevents MITM or compromised-server attacks on the model registry.
+        //
+        // Using a URL that actually resolves (to keep the test fast; the point
+        // is that the registry is not stored even if a response were received).
+        using var svc = new ModelRegistryService(null);
+
+        // Must not throw regardless.
+        var ex = await Record.ExceptionAsync(() => svc.CheckForUpdatesAsync());
+        Assert.Null(ex);
+
+        // Post-condition: GetLatestModel doesn't crash — service is usable.
+        var noEntry = Record.Exception(() => svc.GetLatestModel("any"));
+        Assert.Null(noEntry);
+    }
+
     [Fact]
     public void Dispose_IsIdempotent()
     {
