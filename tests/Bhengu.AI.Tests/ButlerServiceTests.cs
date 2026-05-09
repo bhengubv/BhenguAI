@@ -771,6 +771,65 @@ public sealed class ButlerServiceTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // Observer contract: fires even when no tool bridge is configured
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task Observer_NoBridgeConfigured_ToolEventStillFired()
+    {
+        // Contract: IButlerObserver.OnToolInvokedAsync is called with the
+        // failure result even when no IToolBridge is wired — e.g. for
+        // analytics or billing systems that track all tool attempts.
+        var observer = new FakeButlerObserver();
+        await using var svc = BuildService(observer: observer, toolBridge: null);
+        await svc.StartAsync();
+
+        var result = await svc.InvokeToolAsync(new ToolInvocation
+        {
+            ToolName  = "tgn.sdpkt.get_balance",
+            Arguments = new Dictionary<string, object?>(),
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(1, observer.ToolInvokedCount);
+        Assert.NotNull(observer.LastToolEvent);
+        Assert.Equal("tgn.sdpkt.get_balance", observer.LastToolEvent!.Invocation.ToolName);
+        Assert.False(observer.LastToolEvent.Result.Success);
+    }
+
+    // ------------------------------------------------------------------
+    // StopAsync cancels an in-flight ChatAsync
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StopAsync_WhileChatAsyncBlocking_CancelsPendingCall()
+    {
+        // When StopAsync is called while a ChatAsync is waiting for the generator,
+        // the linked CancellationTokenSource (_shutdownCts) is cancelled, which
+        // should propagate OperationCanceledException to the caller.
+        var butlerOpts = new ButlerOptions
+        {
+            ModelPath   = _modelPath,
+            WarmOnStart = false,
+        };
+        await using var svc = new ButlerService(butlerOpts,
+            generatorFactory: _ => new BlockingChatGenerator());
+
+        await svc.StartAsync();
+
+        // Start a chat call that blocks until cancelled.
+        var chatTask = svc.ChatAsync(new[] { new ChatMessage("user", "hi") });
+
+        // Give the generator a moment to enter its blocking await.
+        await Task.Delay(50);
+
+        // StopAsync cancels the shutdown CTS → the blocking GenerateAsync should throw.
+        await svc.StopAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => chatTask);
+    }
+
+    // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
 
@@ -802,6 +861,33 @@ public sealed class ButlerServiceTests : IDisposable
             GenerationOptions? options = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         { await Task.Yield(); yield return _reply; }
+
+        public void Dispose() { }
+    }
+
+    /// <summary>
+    /// Generator that blocks indefinitely until the cancellation token fires.
+    /// Used to verify that StopAsync can cancel an in-flight ChatAsync.
+    /// </summary>
+    private sealed class BlockingChatGenerator : IChatGenerator
+    {
+        public async Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.Infinite, ct); // blocks until ct is cancelled
+            return "never";
+        }
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            yield break;
+        }
 
         public void Dispose() { }
     }
