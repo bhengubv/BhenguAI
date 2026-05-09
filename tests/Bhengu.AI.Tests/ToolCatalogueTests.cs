@@ -325,3 +325,129 @@ public sealed class ToolCatalogueTests
             bridge.AvailableTools.Count);
     }
 }
+
+// ============================================================================
+// TheGeekNetworkTools — per-API smoke tests
+// Ensures every individual API method returns a non-empty, well-formed list.
+// ============================================================================
+
+public sealed class TheGeekNetworkToolsApiCoverageTests
+{
+    [Theory]
+    [InlineData("Account")]
+    [InlineData("Audit")]
+    [InlineData("Auth")]
+    [InlineData("BidBaas")]
+    [InlineData("BillPayment")]
+    [InlineData("Blockchain")]
+    [InlineData("Butler")]
+    [InlineData("CircleAether")]
+    [InlineData("Ecommerce")]
+    [InlineData("Electricity")]
+    [InlineData("Geo")]
+    [InlineData("Glocell")]
+    [InlineData("Incentives")]
+    [InlineData("KiffStore")]
+    [InlineData("Ledger")]
+    [InlineData("Localization")]
+    [InlineData("Maps")]
+    [InlineData("MapsData")]
+    [InlineData("Media")]
+    [InlineData("Messaging")]
+    [InlineData("Notification")]
+    [InlineData("OpSupport")]
+    [InlineData("Panik")]
+    [InlineData("Payfast")]
+    [InlineData("Sdpkt")]
+    [InlineData("ShhMoney")]
+    [InlineData("SleptOn")]
+    [InlineData("SortedClothing")]
+    [InlineData("TagMe")]
+    [InlineData("Takemehome")]
+    [InlineData("TheHotList")]
+    [InlineData("TheJobCenter")]
+    [InlineData("ThirdParty")]
+    [InlineData("TrustSeal")]
+    [InlineData("Wallet")]
+    [InlineData("WhatWeWant")]
+    [InlineData("Wolverine")]
+    public void EachApiGroup_ReturnsNonEmptyWellFormedList(string apiName)
+    {
+        // Invoke the method by name via reflection so we can drive all APIs
+        // from a single parameterised test without duplicating call sites.
+        var method = typeof(TheGeekNetworkTools).GetMethod(
+            apiName,
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(method); // API method must exist
+
+        var result = (IReadOnlyList<ToolDefinition>)method!.Invoke(null, null)!;
+        Assert.NotEmpty(result);
+
+        foreach (var tool in result)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(tool.Name),
+                $"{apiName}: tool has null/empty Name.");
+            Assert.StartsWith("tgn.", tool.Name, StringComparison.Ordinal);
+            Assert.True(tool.Name.Count(c => c == '.') >= 2,
+                $"{apiName}: tool '{tool.Name}' must be tgn.<api>.<verb>.");
+            Assert.False(string.IsNullOrWhiteSpace(tool.Description),
+                $"{apiName}: tool '{tool.Name}' has null/empty Description.");
+            Assert.NotNull(tool.Parameters);
+            Assert.NotNull(tool.RequiredParameters);
+
+            foreach (var reqParam in tool.RequiredParameters)
+            {
+                Assert.True(tool.Parameters.ContainsKey(reqParam),
+                    $"{apiName}.{tool.Name}: required param '{reqParam}' not in Parameters.");
+            }
+        }
+    }
+
+    [Fact]
+    public void GetAllTools_CountMatchesSumOfAllApis()
+    {
+        // GetAllTools() must be the union of all individual API lists.
+        // Any API added to a group method but forgotten in GetAllTools() is caught here.
+        var sumFromGroups =
+            TheGeekNetworkTools.Account().Count +
+            TheGeekNetworkTools.Audit().Count +
+            TheGeekNetworkTools.Auth().Count +
+            TheGeekNetworkTools.BidBaas().Count +
+            TheGeekNetworkTools.BillPayment().Count +
+            TheGeekNetworkTools.Blockchain().Count +
+            TheGeekNetworkTools.Butler().Count +
+            TheGeekNetworkTools.CircleAether().Count +
+            TheGeekNetworkTools.Ecommerce().Count +
+            TheGeekNetworkTools.Electricity().Count +
+            TheGeekNetworkTools.Geo().Count +
+            TheGeekNetworkTools.Glocell().Count +
+            TheGeekNetworkTools.Incentives().Count +
+            TheGeekNetworkTools.KiffStore().Count +
+            TheGeekNetworkTools.Ledger().Count +
+            TheGeekNetworkTools.Localization().Count +
+            TheGeekNetworkTools.Maps().Count +
+            TheGeekNetworkTools.MapsData().Count +
+            TheGeekNetworkTools.Media().Count +
+            TheGeekNetworkTools.Messaging().Count +
+            TheGeekNetworkTools.Notification().Count +
+            TheGeekNetworkTools.OpSupport().Count +
+            TheGeekNetworkTools.Panik().Count +
+            TheGeekNetworkTools.Payfast().Count +
+            TheGeekNetworkTools.Sdpkt().Count +
+            TheGeekNetworkTools.ShhMoney().Count +
+            TheGeekNetworkTools.SleptOn().Count +
+            TheGeekNetworkTools.SortedClothing().Count +
+            TheGeekNetworkTools.TagMe().Count +
+            TheGeekNetworkTools.Takemehome().Count +
+            TheGeekNetworkTools.TheHotList().Count +
+            TheGeekNetworkTools.TheJobCenter().Count +
+            TheGeekNetworkTools.ThirdParty().Count +
+            TheGeekNetworkTools.TrustSeal().Count +
+            TheGeekNetworkTools.Wallet().Count +
+            TheGeekNetworkTools.WhatWeWant().Count +
+            TheGeekNetworkTools.Wolverine().Count;
+
+        Assert.Equal(sumFromGroups, TheGeekNetworkTools.GetAllTools().Count);
+    }
+}
