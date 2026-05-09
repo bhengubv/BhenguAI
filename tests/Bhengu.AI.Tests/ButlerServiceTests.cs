@@ -1354,3 +1354,217 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
         }
     }
 }
+
+// ============================================================================
+// ButlerService — edge-case behavioral contracts
+// ============================================================================
+
+public sealed class ButlerServiceEdgeCaseTests : IDisposable
+{
+    private readonly string _modelPath = Path.GetTempFileName();
+
+    public void Dispose()
+    {
+        try { File.Delete(_modelPath); } catch { /* best-effort */ }
+    }
+
+    // ------------------------------------------------------------------
+    // StreamAsync with zero chunks: OnStreamStartedAsync must NOT fire,
+    // OnStreamCompletedAsync MUST fire with TokenCount = 0.
+    //
+    // Production scenario: the LLM produces no output (e.g. an immediate
+    // stop-sequence match, context overflow, or a native crash path that
+    // the generator handles by yielding nothing).
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StreamAsync_EmptyGeneratorOutput_CompletedFired_StartedNotFired()
+    {
+        var observer = new FakeButlerObserver();
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            Observer     = observer,
+        };
+        // FakeChatGenerator with an explicitly empty stream-chunks array.
+        await using var svc = new ButlerService(opts,
+            generatorFactory: _ => new FakeChatGenerator("", Array.Empty<string>()));
+        await svc.StartAsync();
+
+        var received = new List<string>();
+        await foreach (var piece in svc.StreamAsync(new[] { new ChatMessage("user", "q") }))
+            received.Add(piece);
+
+        // No chunks → no items in the enumeration.
+        Assert.Empty(received);
+
+        // OnStreamStartedAsync fires on the FIRST yielded token. With zero
+        // tokens it must never fire.
+        Assert.Equal(0, observer.StreamStartedCount);
+
+        // OnStreamCompletedAsync always fires, regardless of token count.
+        Assert.Equal(1, observer.StreamCompletedCount);
+        Assert.Equal(0, observer.LastStreamCompletedEvent!.TokenCount);
+    }
+
+    // ------------------------------------------------------------------
+    // InvokeToolAsync: non-OCE from bridge propagates to the caller.
+    //
+    // ButlerService.InvokeToolAsync has no try/catch around the bridge
+    // call — exceptions (other than OCE) surface to the caller unchanged.
+    // This is by design: the bridge is expected to return ToolResult
+    // failures, not throw.  A thrown exception signals a code bug.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task InvokeToolAsync_BridgeThrowsException_PropagatesUnwrapped()
+    {
+        var bridge = new ExplodingToolBridge();
+        var opts = new ButlerOptions
+        {
+            ModelPath   = _modelPath,
+            WarmOnStart = false,
+            ToolBridge  = bridge,
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await svc.StartAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            svc.InvokeToolAsync(new ToolInvocation
+            {
+                ToolName  = "tgn.sdpkt.get_balance",
+                Arguments = new Dictionary<string, object?>(),
+            }));
+    }
+
+    // ------------------------------------------------------------------
+    // ChatAsync: non-OCE from generator propagates to the caller.
+    //
+    // Warm-up failures are swallowed (see WarmOnStart tests).  But
+    // failures during a real ChatAsync call must propagate — if the
+    // native model handle is corrupted the caller needs to know.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ChatAsync_GeneratorThrowsNonOCE_ExceptionPropagates()
+    {
+        var opts = new ButlerOptions
+        {
+            ModelPath   = _modelPath,
+            WarmOnStart = false,
+        };
+        await using var svc = new ButlerService(opts,
+            generatorFactory: _ => new AlwaysThrowingGenerator());
+        await svc.StartAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            svc.ChatAsync(new[] { new ChatMessage("user", "hello") }));
+    }
+
+    // ------------------------------------------------------------------
+    // StreamAsync: non-OCE from generator propagates to the consumer.
+    //
+    // Same contract as ChatAsync: the service does not catch non-OCE
+    // exceptions from the generator's stream.  When a streaming inference
+    // fails mid-flight (e.g. native handle freed early), the caller sees
+    // the exception on the next MoveNextAsync() call.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task StreamAsync_GeneratorStreamThrows_ExceptionPropagates()
+    {
+        var opts = new ButlerOptions
+        {
+            ModelPath   = _modelPath,
+            WarmOnStart = false,
+        };
+        await using var svc = new ButlerService(opts,
+            generatorFactory: _ => new StreamThrowingGenerator());
+        await svc.StartAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "q") })) { }
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Private helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Tool bridge that always throws <see cref="InvalidOperationException"/>
+    /// (simulating a code bug in the bridge implementation).
+    /// </summary>
+    private sealed class ExplodingToolBridge : IToolBridge
+    {
+        public IReadOnlyList<ToolDefinition> AvailableTools =>
+            new[] { new ToolDefinition
+            {
+                Name = "tgn.sdpkt.get_balance",
+                Description = "exploding",
+                Parameters = new Dictionary<string, ToolParameter>(),
+                RequiredParameters = Array.Empty<string>(),
+            }};
+
+        public Task<ToolResult> InvokeAsync(ToolInvocation invocation, CancellationToken ct = default)
+            => throw new InvalidOperationException("Bridge internal failure");
+    }
+
+    /// <summary>
+    /// Generator that always throws <see cref="InvalidOperationException"/>
+    /// from <see cref="IChatGenerator.GenerateAsync"/> (simulating a
+    /// corrupted native handle or other fatal internal error).
+    /// </summary>
+    private sealed class AlwaysThrowingGenerator : IChatGenerator
+    {
+        public Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("Native handle corrupted");
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            // StreamAsync not exercised by this test class; yield nothing.
+            await Task.Yield();
+            yield break;
+        }
+
+        public void Dispose() { }
+    }
+
+    /// <summary>
+    /// Generator whose <see cref="IChatGenerator.StreamAsync"/> throws
+    /// <see cref="InvalidOperationException"/> immediately on first MoveNextAsync.
+    /// Used to verify that streaming exceptions propagate to the caller.
+    /// </summary>
+    private sealed class StreamThrowingGenerator : IChatGenerator
+    {
+        // Non-const field: compiler cannot treat the throw branch as unreachable.
+        private readonly bool _shouldThrow = true;
+
+        public Task<string> GenerateAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            CancellationToken ct = default)
+            => Task.FromResult("ok");
+
+        public async IAsyncEnumerable<string> StreamAsync(
+            IReadOnlyList<ChatMessage> messages,
+            GenerationOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            await Task.Yield();
+            if (_shouldThrow)
+                throw new InvalidOperationException("Stream inference failure");
+            yield break;
+        }
+
+        public void Dispose() { }
+    }
+}
