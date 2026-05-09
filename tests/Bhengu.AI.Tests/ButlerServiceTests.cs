@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Bhengu.AI.Core;
 using Bhengu.AI.Hosting;
 using Bhengu.AI.Inference;
 using Bhengu.AI.Tools;
@@ -894,6 +895,22 @@ public sealed class ButlerServicePathResolutionTests
         await Assert.ThrowsAsync<FileNotFoundException>(() => svc.StartAsync());
     }
 
+    [Fact]
+    public async Task StartAsync_WithModelLoader_DownloadReturnsInvalidPath_ThrowsInvalidOperation()
+    {
+        // Contract: if DownloadModelAsync returns an empty or non-existent path
+        // the service throws InvalidOperationException rather than swallowing the error.
+        var badLoader = new BadPathLoader();
+        var opts = new ButlerOptions
+        {
+            ModelId     = "Qwen3-14B-Q4",
+            ModelPath   = null,
+            WarmOnStart = false,
+        };
+        await using var svc = new ButlerService(opts, badLoader, generatorFactory: _ => new FakeChatGenerator());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync());
+    }
+
     // ------------------------------------------------------------------
     // Constructor argument guard
     // ------------------------------------------------------------------
@@ -903,6 +920,30 @@ public sealed class ButlerServicePathResolutionTests
     {
         Assert.Throws<ArgumentNullException>(() =>
             new ButlerService(null!));
+    }
+
+    // ------------------------------------------------------------------
+    // Private helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Loader whose GetModelPath returns empty string (not cached, triggers
+    /// DownloadModelAsync path) and whose DownloadModelAsync also returns an
+    /// empty string — this triggers the InvalidOperationException guard in
+    /// ButlerService.ResolveModelPathAsync ("Model loader returned an invalid path").
+    /// </summary>
+    private sealed class BadPathLoader : IModelLoader
+    {
+        // Return empty → service sees "not cached", proceeds to DownloadModelAsync.
+        public string GetModelPath(string modelName) => "";
+
+        public Task<string> DownloadModelAsync(
+            string modelName, IProgress<float>? progress = null)
+            => Task.FromResult(""); // empty path → service throws InvalidOperationException
+
+        public bool ModelExists(string modelName) => false;
+        public Task<bool> CheckForCriticalUpdateAsync() => Task.FromResult(false);
+        public void Dispose() { }
     }
 }
 
