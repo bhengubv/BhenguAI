@@ -296,6 +296,31 @@ public sealed class ButlerServiceTests : IDisposable
         Assert.Null(ex);
     }
 
+    [Fact]
+    public async Task Observer_OperationCancelledExceptionIsSilentlySwallowed()
+    {
+        // FireObserverAsync specifically catches OperationCanceledException and
+        // discards it. This documents that a cancelling observer does not abort
+        // the butler call — it is silently ignored just like any other exception.
+        var observer = new CancellingObserver();
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            Observer     = observer,
+        };
+        await using var svc = new ButlerService(
+            opts, generatorFactory: _ => new FakeChatGenerator("ok"));
+        await svc.StartAsync();
+
+        // ChatAsync triggers OnChatCompletedAsync which throws OCE in the observer.
+        var ex = await Record.ExceptionAsync(() =>
+            svc.ChatAsync(new[] { new ChatMessage("user", "hi") }));
+
+        // The exception must NOT propagate — it is swallowed by FireObserverAsync.
+        Assert.Null(ex);
+    }
+
     // ------------------------------------------------------------------
     // Concurrency
     // ------------------------------------------------------------------
@@ -586,6 +611,31 @@ public sealed class ButlerServiceTests : IDisposable
 
         var sent = Assert.Single(generator.LastMessages!);
         Assert.Equal("user", sent.Role);
+    }
+
+    [Fact]
+    public async Task ChatAsync_EmptyMessageList_PrependedSystemPromptIsOnlyMessage()
+    {
+        // When the caller sends an empty message list, PrepareMessages still
+        // inserts the system prompt (because the list has no "system" role).
+        // The generator should receive exactly one message — the system prompt.
+        var generator = new FakeChatGenerator("ok");
+        var opts = new ButlerOptions
+        {
+            ModelPath    = _modelPath,
+            WarmOnStart  = false,
+            SystemPrompt = "You are B!",
+        };
+        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await svc.StartAsync();
+
+        // Pass an empty message list — no user message at all.
+        await svc.ChatAsync(Array.Empty<ChatMessage>());
+
+        var msgs = generator.LastMessages!;
+        Assert.Single(msgs);
+        Assert.Equal("system",   msgs[0].Role);
+        Assert.Equal("You are B!", msgs[0].Content);
     }
 
     // ------------------------------------------------------------------
@@ -890,6 +940,32 @@ public sealed class ButlerServiceTests : IDisposable
         }
 
         public void Dispose() { }
+    }
+
+    /// <summary>
+    /// Observer that throws <see cref="OperationCanceledException"/> from
+    /// <see cref="IButlerObserver.OnChatCompletedAsync"/> to test that
+    /// <c>FireObserverAsync</c> silently swallows OCE without aborting the call.
+    /// </summary>
+    private sealed class CancellingObserver : IButlerObserver
+    {
+        public ValueTask OnStartedAsync(CancellationToken ct = default)
+            => ValueTask.CompletedTask;
+
+        public ValueTask OnStoppedAsync(CancellationToken ct = default)
+            => ValueTask.CompletedTask;
+
+        public ValueTask OnChatCompletedAsync(ButlerChatEvent @event, CancellationToken ct = default)
+            => throw new OperationCanceledException("Simulated observer cancellation.");
+
+        public ValueTask OnStreamStartedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+            => ValueTask.CompletedTask;
+
+        public ValueTask OnStreamCompletedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+            => ValueTask.CompletedTask;
+
+        public ValueTask OnToolInvokedAsync(ButlerToolEvent @event, CancellationToken ct = default)
+            => ValueTask.CompletedTask;
     }
 }
 
