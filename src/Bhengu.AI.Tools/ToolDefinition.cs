@@ -32,5 +32,13 @@ namespace Bhengu.AI.Tools
         public required bool Success { get; init; }
         public object? Result { get; init; }
         public string? Error { get; init; }
+
+        /// <summary>Convenience factory for a failed tool result.</summary>
+        public static ToolResult Failure(string toolName, string error) =>
+            new() { ToolName = toolName, Success = false, Error = error };
+
+        /// <summary>Convenience factory for a successful tool result.</summary>
+        public static ToolResult Ok(string toolName, object? result = null) =>
+            new() { ToolName = toolName, Success = true, Result = result };
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Bhengu.AI.Hosting;
 using Bhengu.AI.Inference;
@@ -8,10 +8,10 @@ using Xunit;
 namespace Bhengu.AI.Tests;
 
 // ============================================================================
-// ButlerChatEvent
+// AIChatEvent
 // ============================================================================
 
-public sealed class ButlerChatEventTests
+public sealed class AIChatEventTests
 {
     private static readonly IReadOnlyList<ChatMessage> SampleMessages =
         new[] { new ChatMessage("user", "hello") };
@@ -23,7 +23,7 @@ public sealed class ButlerChatEventTests
         var elapsed   = TimeSpan.FromMilliseconds(123);
         var timestamp = DateTimeOffset.UtcNow;
 
-        var e = new ButlerChatEvent(id, SampleMessages, "Hi there!", elapsed, timestamp);
+        var e = new AIChatEvent(id, SampleMessages, "Hi there!", elapsed, timestamp);
 
         Assert.Equal(id,             e.CorrelationId);
         Assert.Same(SampleMessages,  e.Messages);
@@ -40,8 +40,8 @@ public sealed class ButlerChatEventTests
         var ts        = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var msgs      = new[] { new ChatMessage("user", "hi") };
 
-        var e1 = new ButlerChatEvent(id, msgs, "reply", elapsed, ts);
-        var e2 = new ButlerChatEvent(id, msgs, "reply", elapsed, ts);
+        var e1 = new AIChatEvent(id, msgs, "reply", elapsed, ts);
+        var e2 = new AIChatEvent(id, msgs, "reply", elapsed, ts);
 
         Assert.Equal(e1, e2);
     }
@@ -50,8 +50,8 @@ public sealed class ButlerChatEventTests
     public void Equality_DifferentCorrelationId_NotEqual()
     {
         var ts  = DateTimeOffset.UtcNow;
-        var e1 = new ButlerChatEvent(Guid.NewGuid(), SampleMessages, "r", TimeSpan.Zero, ts);
-        var e2 = new ButlerChatEvent(Guid.NewGuid(), SampleMessages, "r", TimeSpan.Zero, ts);
+        var e1 = new AIChatEvent(Guid.NewGuid(), SampleMessages, "r", TimeSpan.Zero, ts);
+        var e2 = new AIChatEvent(Guid.NewGuid(), SampleMessages, "r", TimeSpan.Zero, ts);
         Assert.NotEqual(e1, e2);
     }
 
@@ -60,7 +60,7 @@ public sealed class ButlerChatEventTests
     {
         var id      = Guid.NewGuid();
         var ts      = DateTimeOffset.UtcNow;
-        var orig    = new ButlerChatEvent(id, SampleMessages, "original", TimeSpan.Zero, ts);
+        var orig    = new AIChatEvent(id, SampleMessages, "original", TimeSpan.Zero, ts);
         var updated = orig with { Response = "updated" };
 
         Assert.Equal("updated",    updated.Response);
@@ -85,18 +85,18 @@ public sealed class ButlerChatEventTests
         var ts   = DateTimeOffset.UtcNow;
         var msgs = new[] { new ChatMessage("user", "x") };
 
-        var e1 = new ButlerChatEvent(id, msgs, "r", TimeSpan.Zero, ts);
-        var e2 = new ButlerChatEvent(id, msgs, "r", TimeSpan.Zero, ts);
+        var e1 = new AIChatEvent(id, msgs, "r", TimeSpan.Zero, ts);
+        var e2 = new AIChatEvent(id, msgs, "r", TimeSpan.Zero, ts);
 
         Assert.Equal(e1.GetHashCode(), e2.GetHashCode());
     }
 }
 
 // ============================================================================
-// ButlerStreamEvent
+// AIStreamEvent
 // ============================================================================
 
-public sealed class ButlerStreamEventTests
+public sealed class AIStreamEventTests
 {
     private static readonly IReadOnlyList<ChatMessage> Msgs =
         new[] { new ChatMessage("user", "stream me") };
@@ -108,7 +108,7 @@ public sealed class ButlerStreamEventTests
         var elapsed   = TimeSpan.FromMilliseconds(50);
         var ts        = DateTimeOffset.UtcNow;
 
-        var e = new ButlerStreamEvent(id, Msgs, elapsed, TokenCount: 0, ts);
+        var e = new AIStreamEvent(id, Msgs, elapsed, TokenCount: 0, ts);
 
         Assert.Equal(id,      e.CorrelationId);
         Assert.Same(Msgs,     e.Messages);
@@ -121,7 +121,7 @@ public sealed class ButlerStreamEventTests
     public void OnStarted_TokenCount_IsZero()
     {
         // Contract: OnStreamStarted fires with TokenCount = 0.
-        var e = new ButlerStreamEvent(Guid.NewGuid(), Msgs, TimeSpan.Zero, 0, DateTimeOffset.UtcNow);
+        var e = new AIStreamEvent(Guid.NewGuid(), Msgs, TimeSpan.Zero, 0, DateTimeOffset.UtcNow);
         Assert.Equal(0, e.TokenCount);
     }
 
@@ -129,7 +129,7 @@ public sealed class ButlerStreamEventTests
     public void OnCompleted_TokenCount_ReflectsActualCount()
     {
         // Contract: OnStreamCompleted fires with TokenCount = n tokens yielded.
-        var e = new ButlerStreamEvent(Guid.NewGuid(), Msgs, TimeSpan.FromSeconds(2), 42, DateTimeOffset.UtcNow);
+        var e = new AIStreamEvent(Guid.NewGuid(), Msgs, TimeSpan.FromSeconds(2), 42, DateTimeOffset.UtcNow);
         Assert.Equal(42, e.TokenCount);
     }
 
@@ -138,8 +138,8 @@ public sealed class ButlerStreamEventTests
     {
         var id  = Guid.NewGuid();
         var ts  = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
-        var e1  = new ButlerStreamEvent(id, Msgs, TimeSpan.Zero, 3, ts);
-        var e2  = new ButlerStreamEvent(id, Msgs, TimeSpan.Zero, 3, ts);
+        var e1  = new AIStreamEvent(id, Msgs, TimeSpan.Zero, 3, ts);
+        var e2  = new AIStreamEvent(id, Msgs, TimeSpan.Zero, 3, ts);
         Assert.Equal(e1, e2);
     }
 
@@ -148,15 +148,15 @@ public sealed class ButlerStreamEventTests
     {
         var id  = Guid.NewGuid();
         var ts  = DateTimeOffset.UtcNow;
-        var e1  = new ButlerStreamEvent(id, Msgs, TimeSpan.Zero, 3, ts);
-        var e2  = new ButlerStreamEvent(id, Msgs, TimeSpan.Zero, 5, ts);
+        var e1  = new AIStreamEvent(id, Msgs, TimeSpan.Zero, 3, ts);
+        var e2  = new AIStreamEvent(id, Msgs, TimeSpan.Zero, 5, ts);
         Assert.NotEqual(e1, e2);
     }
 
     [Fact]
     public void WithExpression_OverridesTokenCount()
     {
-        var orig    = new ButlerStreamEvent(Guid.NewGuid(), Msgs, TimeSpan.Zero, 0, DateTimeOffset.UtcNow);
+        var orig    = new AIStreamEvent(Guid.NewGuid(), Msgs, TimeSpan.Zero, 0, DateTimeOffset.UtcNow);
         var updated = orig with { TokenCount = 99 };
         Assert.Equal(99,                updated.TokenCount);
         Assert.Equal(orig.CorrelationId, updated.CorrelationId);
@@ -164,10 +164,10 @@ public sealed class ButlerStreamEventTests
 }
 
 // ============================================================================
-// ButlerToolEvent
+// AIToolEvent
 // ============================================================================
 
-public sealed class ButlerToolEventTests
+public sealed class AIToolEventTests
 {
     private static ToolInvocation SampleInvocation => new()
     {
@@ -191,7 +191,7 @@ public sealed class ButlerToolEventTests
         var elapsed = TimeSpan.FromMilliseconds(200);
         var ts      = DateTimeOffset.UtcNow;
 
-        var e = new ButlerToolEvent(id, inv, result, elapsed, ts);
+        var e = new AIToolEvent(id, inv, result, elapsed, ts);
 
         Assert.Equal(id,      e.CorrelationId);
         Assert.Same(inv,      e.Invocation);
@@ -206,8 +206,8 @@ public sealed class ButlerToolEventTests
         var success = new ToolResult { ToolName = "tgn.test.op", Success = true };
         var failure = new ToolResult { ToolName = "tgn.test.op", Success = false, Error = "err" };
 
-        var eSucc = new ButlerToolEvent(Guid.NewGuid(), SampleInvocation, success, TimeSpan.Zero, DateTimeOffset.UtcNow);
-        var eFail = new ButlerToolEvent(Guid.NewGuid(), SampleInvocation, failure, TimeSpan.Zero, DateTimeOffset.UtcNow);
+        var eSucc = new AIToolEvent(Guid.NewGuid(), SampleInvocation, success, TimeSpan.Zero, DateTimeOffset.UtcNow);
+        var eFail = new AIToolEvent(Guid.NewGuid(), SampleInvocation, failure, TimeSpan.Zero, DateTimeOffset.UtcNow);
 
         Assert.True(eSucc.Result.Success);
         Assert.False(eFail.Result.Success);
@@ -222,8 +222,8 @@ public sealed class ButlerToolEventTests
         var res = SuccessResult;
         var ts  = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
 
-        var e1 = new ButlerToolEvent(id, inv, res, TimeSpan.Zero, ts);
-        var e2 = new ButlerToolEvent(id, inv, res, TimeSpan.Zero, ts);
+        var e1 = new AIToolEvent(id, inv, res, TimeSpan.Zero, ts);
+        var e2 = new AIToolEvent(id, inv, res, TimeSpan.Zero, ts);
 
         Assert.Equal(e1, e2);
     }
@@ -231,7 +231,7 @@ public sealed class ButlerToolEventTests
     [Fact]
     public void WithExpression_OverridesElapsed()
     {
-        var orig    = new ButlerToolEvent(Guid.NewGuid(), SampleInvocation, SuccessResult, TimeSpan.Zero, DateTimeOffset.UtcNow);
+        var orig    = new AIToolEvent(Guid.NewGuid(), SampleInvocation, SuccessResult, TimeSpan.Zero, DateTimeOffset.UtcNow);
         var updated = orig with { Elapsed = TimeSpan.FromSeconds(5) };
 
         Assert.Equal(TimeSpan.FromSeconds(5), updated.Elapsed);
@@ -246,7 +246,7 @@ public sealed class ButlerToolEventTests
             ToolName  = "tgn.bidbaas.place_bid",
             Arguments = new Dictionary<string, object?> { ["lotId"] = 7 },
         };
-        var e = new ButlerToolEvent(Guid.NewGuid(), inv, SuccessResult, TimeSpan.Zero, DateTimeOffset.UtcNow);
+        var e = new AIToolEvent(Guid.NewGuid(), inv, SuccessResult, TimeSpan.Zero, DateTimeOffset.UtcNow);
         Assert.Equal("tgn.bidbaas.place_bid", e.Invocation.ToolName);
     }
 }

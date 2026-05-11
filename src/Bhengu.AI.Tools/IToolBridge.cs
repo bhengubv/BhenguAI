@@ -12,5 +12,14 @@ namespace Bhengu.AI.Tools
     {
         IReadOnlyList<ToolDefinition> AvailableTools { get; }
         Task<ToolResult> InvokeAsync(ToolInvocation invocation, CancellationToken ct = default);
+
+        /// <summary>
+        /// Returns the tools available through this bridge by querying the remote
+        /// service. Optional — implementations that expose a static tool list may
+        /// return an empty list or the same value as <see cref="AvailableTools"/>.
+        /// The default implementation returns the synchronous <see cref="AvailableTools"/> list.
+        /// </summary>
+        Task<IReadOnlyList<ToolDefinition>> GetAvailableToolsAsync(CancellationToken ct = default)
+            => Task.FromResult(AvailableTools);
     }
 }

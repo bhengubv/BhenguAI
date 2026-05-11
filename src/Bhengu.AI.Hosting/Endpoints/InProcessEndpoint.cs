@@ -1,4 +1,4 @@
-// InProcessEndpoint.cs
+﻿// InProcessEndpoint.cs
 //
 // Trivial endpoint for callers that live in the same process as the
 // butler service (e.g. a keyboard IME hosting Butler directly). It just
@@ -12,12 +12,12 @@ namespace Bhengu.AI.Hosting.Endpoints;
 
 /// <summary>
 /// In-process endpoint. No transport — just exposes the underlying
-/// <see cref="IButlerService"/> directly so callers can invoke it as a
+/// <see cref="IAIService"/> directly so callers can invoke it as a
 /// regular .NET object. Use this when keyboard and Butler share a process.
 /// </summary>
-public sealed class InProcessEndpoint : IButlerEndpoint
+public sealed class InProcessEndpoint : IAIEndpoint
 {
-    private IButlerService? _service;
+    private IAIService? _service;
     private bool _started;
     private bool _disposed;
 
@@ -25,10 +25,10 @@ public sealed class InProcessEndpoint : IButlerEndpoint
     /// The wrapped service. <c>null</c> until <see cref="StartAsync"/> has run.
     /// In-process callers can read this directly.
     /// </summary>
-    public IButlerService? ServiceAccessor => _service;
+    public IAIService? ServiceAccessor => _service;
 
     /// <inheritdoc />
-    public Task StartAsync(IButlerService service, CancellationToken ct = default)
+    public Task StartAsync(IAIService service, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_started) return Task.CompletedTask;

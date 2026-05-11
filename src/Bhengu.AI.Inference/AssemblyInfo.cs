@@ -28,3 +28,8 @@ using System.Runtime.InteropServices;
 
 // Allow the test project to access internal members (e.g. BuildQwenChatPrompt).
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Bhengu.AI.Tests")]
+
+// Allow the Embeddings project to use the llama.cpp safe-handle types and
+// interop helpers that live in this assembly (e.g. LlamaModelHandle,
+// LlamaContextHandle, LlamaCppInterop).
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Bhengu.AI.Embeddings")]

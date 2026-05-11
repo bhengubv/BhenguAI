@@ -5,6 +5,9 @@ public static class SimdOps
 {
     public static float CosineSimilarity(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
     {
+        if (a.Length != b.Length || a.Length == 0)
+            throw new ArgumentException("Vectors must be the same non-zero length.");
+
         if (Vector.IsHardwareAccelerated && a.Length >= Vector<float>.Count)
         {
             // Hardware-accelerated path.

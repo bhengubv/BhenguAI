@@ -1,6 +1,6 @@
-// ButlerHttpClient.cs
+﻿// AIHttpClient.cs
 //
-// Out-of-process client for HttpLoopbackEndpoint. Mirrors the IButlerService
+// Out-of-process client for HttpLoopbackEndpoint. Mirrors the IAIService
 // surface so callers (e.g. CircleOS keyboard) can talk to a remote Butler
 // running in the CircleOS background service with the same shape they'd use
 // for an in-process service.
@@ -24,10 +24,10 @@ namespace Bhengu.AI.Hosting.Endpoints;
 
 /// <summary>
 /// HTTP client that talks to a <see cref="HttpLoopbackEndpoint"/>. Methods
-/// mirror <see cref="IButlerService"/> so the same call sites work in-process
+/// mirror <see cref="IAIService"/> so the same call sites work in-process
 /// (direct service) or out-of-process (this client).
 /// </summary>
-public sealed class ButlerHttpClient : IDisposable
+public sealed class AIHttpClient : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
@@ -43,7 +43,7 @@ public sealed class ButlerHttpClient : IDisposable
     /// </summary>
     /// <param name="port">Port the endpoint bound to (see <see cref="HttpLoopbackEndpoint.BoundPort"/>).</param>
     /// <param name="token">Shared-secret token (see <see cref="HttpLoopbackEndpoint.Token"/>).</param>
-    public ButlerHttpClient(int port, string token)
+    public AIHttpClient(int port, string token)
         : this(BuildDefaultHttpClient(port, token), ownsClient: true)
     {
     }
@@ -54,13 +54,13 @@ public sealed class ButlerHttpClient : IDisposable
     /// already have <c>BaseAddress</c> set to the endpoint root and the
     /// <c>X-Butler-Token</c> header configured.
     /// </summary>
-    public ButlerHttpClient(HttpClient httpClient, bool ownsClient = false)
+    public AIHttpClient(HttpClient httpClient, bool ownsClient = false)
     {
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _ownsClient = ownsClient;
     }
 
-    /// <summary>Mirrors <see cref="IButlerService.AskAsync"/>.</summary>
+    /// <summary>Mirrors <see cref="IAIService.AskAsync"/>.</summary>
     public async Task<string> AskAsync(string question, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(question);
@@ -74,7 +74,7 @@ public sealed class ButlerHttpClient : IDisposable
         return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>Mirrors <see cref="IButlerService.ChatAsync"/>.</summary>
+    /// <summary>Mirrors <see cref="IAIService.ChatAsync"/>.</summary>
     public async Task<string> ChatAsync(
         IReadOnlyList<ChatMessage> messages,
         GenerationOptions? options = null,
@@ -94,7 +94,7 @@ public sealed class ButlerHttpClient : IDisposable
         return parsed?.Content ?? string.Empty;
     }
 
-    /// <summary>Mirrors <see cref="IButlerService.StreamAsync"/>.</summary>
+    /// <summary>Mirrors <see cref="IAIService.StreamAsync"/>.</summary>
     public async IAsyncEnumerable<string> StreamAsync(
         IReadOnlyList<ChatMessage> messages,
         GenerationOptions? options = null,
@@ -157,7 +157,7 @@ public sealed class ButlerHttpClient : IDisposable
         }
     }
 
-    /// <summary>Mirrors <see cref="IButlerService.InvokeToolAsync"/>.</summary>
+    /// <summary>Mirrors <see cref="IAIService.InvokeToolAsync"/>.</summary>
     public async Task<ToolResult> InvokeToolAsync(ToolInvocation invocation, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(invocation);

@@ -301,6 +301,31 @@ internal static partial class LlamaCppInterop
     [LibraryImport(LibraryName, EntryPoint = "llama_get_logits_ith")]
     public static partial IntPtr llama_get_logits_ith(LlamaContextHandle ctx, int i);
 
+    // -- embeddings ------------------------------------------------------
+
+    /// <summary>
+    /// Returns the embedding dimension for the loaded model (e.g. 1536 for
+    /// Qwen-Embedding-0.6B). Only valid when the context was created with
+    /// <c>LlamaContextParams.embeddings = 1</c>.
+    /// </summary>
+    [LibraryImport(LibraryName, EntryPoint = "llama_n_embd")]
+    public static partial int llama_n_embd(LlamaModelHandle model);
+
+    /// <summary>
+    /// Returns a pointer to the last-sequence embedding vector (float[n_embd]).
+    /// Only valid after a successful <c>llama_decode</c> with
+    /// <c>LlamaContextParams.embeddings = 1</c>.
+    /// </summary>
+    [LibraryImport(LibraryName, EntryPoint = "llama_get_embeddings")]
+    public static partial IntPtr llama_get_embeddings(LlamaContextHandle ctx);
+
+    /// <summary>
+    /// Returns a pointer to the pooled embedding for sequence <paramref name="seq_id"/>.
+    /// Preferred over <see cref="llama_get_embeddings"/> for multi-sequence batches.
+    /// </summary>
+    [LibraryImport(LibraryName, EntryPoint = "llama_get_embeddings_seq")]
+    public static partial IntPtr llama_get_embeddings_seq(LlamaContextHandle ctx, int seq_id);
+
     // -- sampling --------------------------------------------------------
     //
     // llama.cpp's sampler API has changed shape several times. We expose the
@@ -365,4 +390,72 @@ internal static partial class LlamaCppInterop
     {
         public byte no_perf;
     }
+
+    // ── Session / KV-cache state ──────────────────────────────────────────────
+
+    private const string LlamaDll = "llama";
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern nuint llama_state_get_size(nint ctx);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern nuint llama_state_get_data(nint ctx, byte[] dst, nuint size);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern nuint llama_state_set_data(nint ctx, byte[] src, nuint size);
+
+    // C bool is a single byte under DisableRuntimeMarshalling; return byte and compare != 0.
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    public static extern byte llama_state_save_file(
+        nint ctx,
+        string pathSession,
+        int[] tokens,
+        nuint nTokenCount);
+
+    [DllImport(LlamaDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    public static extern byte llama_state_load_file(
+        nint ctx,
+        string pathSession,
+        int[] tokensOut,
+        nuint nTokenCapacity,
+        out nuint nTokenCountOut);
+
+    /// <summary>Save the KV-cache session to <paramref name="path"/>.</summary>
+    /// <returns>true on success.</returns>
+    public static bool SaveSession(nint ctx, string path, int[] tokens)
+        => llama_state_save_file(ctx, path, tokens, (nuint)tokens.Length) != 0;
+
+    /// <summary>Load a KV-cache session from <paramref name="path"/>.</summary>
+    /// <param name="tokenCapacity">Maximum number of tokens to restore.</param>
+    /// <param name="tokensRestored">Actual tokens written to <paramref name="tokensOut"/>.</param>
+    /// <returns>true on success.</returns>
+    public static bool LoadSession(
+        nint ctx,
+        string path,
+        int[] tokensOut,
+        out nuint tokensRestored)
+        => llama_state_load_file(ctx, path, tokensOut, (nuint)tokensOut.Length, out tokensRestored) != 0;
+
+    // ── Vision / llava ───────────────────────────────────────────────────────
+
+    /// <summary>Name of the llava clip shared library.</summary>
+    private const string LlavaDll = "llava";
+
+    [DllImport(LlavaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern nint llava_image_embed_make_with_bytes(
+        nint ctxClip,
+        int nThreads,
+        byte[] imageData,
+        int imageBytes);
+
+    [DllImport(LlavaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void llava_image_embed_free(nint embed);
+
+    // C bool returned as byte under DisableRuntimeMarshalling.
+    [DllImport(LlavaDll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern byte llava_eval_image_embed(
+        nint ctxLlama,
+        nint embed,
+        int nBatch,
+        ref int nPast);
 }

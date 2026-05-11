@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Bhengu.AI.Tests;
 
-public sealed class ButlerServiceTests : IDisposable
+public sealed class AIServiceTests : IDisposable
 {
     // A real (empty) temp file is needed to pass File.Exists() in ResolveModelPathAsync.
     private readonly string _modelPath = Path.GetTempFileName();
@@ -21,7 +21,7 @@ public sealed class ButlerServiceTests : IDisposable
         try { File.Delete(_modelPath); } catch { /* best-effort */ }
     }
 
-    private ButlerService BuildService(
+    private AIService BuildService(
         string reply = "Hi!",
         string[]? streamChunks = null,
         FakeButlerObserver? observer = null,
@@ -29,7 +29,7 @@ public sealed class ButlerServiceTests : IDisposable
         bool warmOnStart = false)
     {
         var generator = new FakeChatGenerator(reply, streamChunks);
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = warmOnStart,
@@ -37,7 +37,7 @@ public sealed class ButlerServiceTests : IDisposable
             ToolBridge   = toolBridge,
             SystemPrompt = "You are B!, a helpful on-device assistant.",
         };
-        return new ButlerService(opts, generatorFactory: _ => generator);
+        return new AIService(opts, generatorFactory: _ => generator);
     }
 
     // ------------------------------------------------------------------
@@ -95,13 +95,13 @@ public sealed class ButlerServiceTests : IDisposable
     public async Task AskAsync_PrependsMissingSystemPrompt()
     {
         var generator = new FakeChatGenerator("reply");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             SystemPrompt = "You are B!",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         await svc.AskAsync("tell me a joke");
@@ -116,13 +116,13 @@ public sealed class ButlerServiceTests : IDisposable
     public async Task ChatAsync_WithExistingSystemMessage_DoesNotPrepend()
     {
         var generator = new FakeChatGenerator("reply");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             SystemPrompt = "You are B!",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         var messages = new List<ChatMessage>
@@ -303,13 +303,13 @@ public sealed class ButlerServiceTests : IDisposable
         // discards it. This documents that a cancelling observer does not abort
         // the butler call — it is silently ignored just like any other exception.
         var observer = new CancellingObserver();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             Observer     = observer,
         };
-        await using var svc = new ButlerService(
+        await using var svc = new AIService(
             opts, generatorFactory: _ => new FakeChatGenerator("ok"));
         await svc.StartAsync();
 
@@ -500,13 +500,13 @@ public sealed class ButlerServiceTests : IDisposable
     public async Task WarmOnStart_True_CallsGeneratorDuringStart()
     {
         var generator = new FakeChatGenerator("warm");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = true,
             SystemPrompt = "sys",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         // One call from warm-up.
@@ -519,13 +519,13 @@ public sealed class ButlerServiceTests : IDisposable
         // Contract: warm-up exceptions (other than OperationCanceledException) are
         // swallowed with a warning log.  The service must reach _started = true.
         var failOnce = new ThrowOnFirstCallGenerator("after-warmup-reply");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = true,
             SystemPrompt = "sys",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => failOnce);
+        await using var svc = new AIService(opts, generatorFactory: _ => failOnce);
 
         // StartAsync must NOT throw even though warm-up fails.
         var startEx = await Record.ExceptionAsync(() => svc.StartAsync());
@@ -546,13 +546,13 @@ public sealed class ButlerServiceTests : IDisposable
         // "SYSTEM" (all-caps) must satisfy the OrdinalIgnoreCase check so
         // no second system message is prepended.
         var generator = new FakeChatGenerator("reply");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             SystemPrompt = "Injected",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         var messages = new List<ChatMessage>
@@ -572,13 +572,13 @@ public sealed class ButlerServiceTests : IDisposable
     public async Task PrepareMessages_TitleCaseSystemRole_DoesNotPrepend()
     {
         var generator = new FakeChatGenerator("reply");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             SystemPrompt = "Injected",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         var messages = new List<ChatMessage>
@@ -597,13 +597,13 @@ public sealed class ButlerServiceTests : IDisposable
         // When SystemPrompt is empty, PrepareMessages must not insert a
         // blank system message (guarded by string.IsNullOrEmpty check).
         var generator = new FakeChatGenerator("reply");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             SystemPrompt = "",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         var messages = new[] { new ChatMessage("user", "hi") };
@@ -620,13 +620,13 @@ public sealed class ButlerServiceTests : IDisposable
         // inserts the system prompt (because the list has no "system" role).
         // The generator should receive exactly one message — the system prompt.
         var generator = new FakeChatGenerator("ok");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             SystemPrompt = "You are B!",
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => generator);
+        await using var svc = new AIService(opts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         // Pass an empty message list — no user message at all.
@@ -706,13 +706,13 @@ public sealed class ButlerServiceTests : IDisposable
     {
         var customOpts = new GenerationOptions { MaxTokens = 128, Temperature = 0.1f };
         var generator  = new FakeChatGenerator("reply");
-        var butlerOpts = new ButlerOptions
+        var butlerOpts = new AIOptions
         {
             ModelPath              = _modelPath,
             WarmOnStart            = false,
             DefaultGenerationOptions = customOpts,
         };
-        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await using var svc = new AIService(butlerOpts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         await svc.ChatAsync(new[] { new ChatMessage("user", "hi") });
@@ -726,13 +726,13 @@ public sealed class ButlerServiceTests : IDisposable
         var defaultOpts  = new GenerationOptions { MaxTokens = 128 };
         var callerOpts   = new GenerationOptions { MaxTokens = 256, Temperature = 0.9f };
         var generator    = new FakeChatGenerator("reply");
-        var butlerOpts   = new ButlerOptions
+        var butlerOpts   = new AIOptions
         {
             ModelPath              = _modelPath,
             WarmOnStart            = false,
             DefaultGenerationOptions = defaultOpts,
         };
-        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await using var svc = new AIService(butlerOpts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         await svc.ChatAsync(new[] { new ChatMessage("user", "hi") }, callerOpts);
@@ -778,7 +778,7 @@ public sealed class ButlerServiceTests : IDisposable
     [Fact]
     public async Task Observer_OnChatEvent_CorrelationId_IsNotEmpty()
     {
-        // ButlerService must assign a fresh GUID per call — never Guid.Empty.
+        // AIService must assign a fresh GUID per call — never Guid.Empty.
         var observer = new FakeButlerObserver();
         await using var svc = BuildService(reply: "hi", observer: observer);
         await svc.StartAsync();
@@ -806,13 +806,13 @@ public sealed class ButlerServiceTests : IDisposable
     {
         var customOpts = new GenerationOptions { MaxTokens = 64, Temperature = 0.2f };
         var generator  = new FakeChatGenerator("r", streamChunks: new[] { "r" });
-        var butlerOpts = new ButlerOptions
+        var butlerOpts = new AIOptions
         {
             ModelPath              = _modelPath,
             WarmOnStart            = false,
             DefaultGenerationOptions = customOpts,
         };
-        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await using var svc = new AIService(butlerOpts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         await foreach (var _ in svc.StreamAsync(new[] { new ChatMessage("user", "hi") })) { }
@@ -827,7 +827,7 @@ public sealed class ButlerServiceTests : IDisposable
     [Fact]
     public async Task Observer_NoBridgeConfigured_ToolEventStillFired()
     {
-        // Contract: IButlerObserver.OnToolInvokedAsync is called with the
+        // Contract: IAIObserver.OnToolInvokedAsync is called with the
         // failure result even when no IToolBridge is wired — e.g. for
         // analytics or billing systems that track all tool attempts.
         var observer = new FakeButlerObserver();
@@ -857,12 +857,12 @@ public sealed class ButlerServiceTests : IDisposable
         // When StopAsync is called while a ChatAsync is waiting for the generator,
         // the linked CancellationTokenSource (_shutdownCts) is cancelled, which
         // should propagate OperationCanceledException to the caller.
-        var butlerOpts = new ButlerOptions
+        var butlerOpts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
         };
-        await using var svc = new ButlerService(butlerOpts,
+        await using var svc = new AIService(butlerOpts,
             generatorFactory: _ => new BlockingChatGenerator());
 
         await svc.StartAsync();
@@ -944,10 +944,10 @@ public sealed class ButlerServiceTests : IDisposable
 
     /// <summary>
     /// Observer that throws <see cref="OperationCanceledException"/> from
-    /// <see cref="IButlerObserver.OnChatCompletedAsync"/> to test that
+    /// <see cref="IAIObserver.OnChatCompletedAsync"/> to test that
     /// <c>FireObserverAsync</c> silently swallows OCE without aborting the call.
     /// </summary>
-    private sealed class CancellingObserver : IButlerObserver
+    private sealed class CancellingObserver : IAIObserver
     {
         public ValueTask OnStartedAsync(CancellationToken ct = default)
             => ValueTask.CompletedTask;
@@ -955,26 +955,26 @@ public sealed class ButlerServiceTests : IDisposable
         public ValueTask OnStoppedAsync(CancellationToken ct = default)
             => ValueTask.CompletedTask;
 
-        public ValueTask OnChatCompletedAsync(ButlerChatEvent @event, CancellationToken ct = default)
+        public ValueTask OnChatCompletedAsync(AIChatEvent @event, CancellationToken ct = default)
             => throw new OperationCanceledException("Simulated observer cancellation.");
 
-        public ValueTask OnStreamStartedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+        public ValueTask OnStreamStartedAsync(AIStreamEvent @event, CancellationToken ct = default)
             => ValueTask.CompletedTask;
 
-        public ValueTask OnStreamCompletedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+        public ValueTask OnStreamCompletedAsync(AIStreamEvent @event, CancellationToken ct = default)
             => ValueTask.CompletedTask;
 
-        public ValueTask OnToolInvokedAsync(ButlerToolEvent @event, CancellationToken ct = default)
+        public ValueTask OnToolInvokedAsync(AIToolEvent @event, CancellationToken ct = default)
             => ValueTask.CompletedTask;
     }
 }
 
 // ============================================================================
-// ButlerService — model-path resolution edge cases
+// AIService — model-path resolution edge cases
 // (separate class because it needs its own temp-file state)
 // ============================================================================
 
-public sealed class ButlerServicePathResolutionTests
+public sealed class AIServicePathResolutionTests
 {
     // ------------------------------------------------------------------
     // ModelPath errors — caught before native load
@@ -984,12 +984,12 @@ public sealed class ButlerServicePathResolutionTests
     public async Task StartAsync_ModelPathMissing_ThrowsFileNotFoundException()
     {
         var missingPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gguf");
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = missingPath,
             WarmOnStart = false,
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await using var svc = new AIService(opts, generatorFactory: _ => new FakeChatGenerator());
         await Assert.ThrowsAsync<FileNotFoundException>(() => svc.StartAsync());
     }
 
@@ -997,7 +997,7 @@ public sealed class ButlerServicePathResolutionTests
     public async Task StartAsync_NoModelPathAndNoLoader_ThrowsInvalidOperation()
     {
         // Neither ModelPath nor IModelLoader is supplied → ResolveModelPathAsync throws.
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = null,  // no direct path
             WarmOnStart = false,
@@ -1005,7 +1005,7 @@ public sealed class ButlerServicePathResolutionTests
         // No modelLoader and no generatorFactory — the factory path short-circuits
         // before the loader is needed, so we test WITHOUT a factory to ensure the
         // loader code path is exercised.
-        await using var svc = new ButlerService(opts, modelLoader: null);
+        await using var svc = new AIService(opts, modelLoader: null);
         await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync());
     }
 
@@ -1025,13 +1025,13 @@ public sealed class ButlerServicePathResolutionTests
             {
                 ["Qwen3-14B-Q4"] = tmpFile,
             });
-            var opts = new ButlerOptions
+            var opts = new AIOptions
             {
                 // ModelPath is null — must resolve via loader
                 ModelId     = "Qwen3-14B-Q4",
                 WarmOnStart = false,
             };
-            await using var svc = new ButlerService(opts, loader, generatorFactory: _ => new FakeChatGenerator());
+            await using var svc = new AIService(opts, loader, generatorFactory: _ => new FakeChatGenerator());
             await svc.StartAsync();
             Assert.True(svc.IsReady);
         }
@@ -1046,13 +1046,13 @@ public sealed class ButlerServicePathResolutionTests
     {
         // FakeModelLoader throws ArgumentException for models not in its registry.
         var loader = new FakeModelLoader(); // empty registry
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelId     = "Qwen3-14B-Q4",
             ModelPath   = null,
             WarmOnStart = false,
         };
-        await using var svc = new ButlerService(opts, loader, generatorFactory: _ => new FakeChatGenerator());
+        await using var svc = new AIService(opts, loader, generatorFactory: _ => new FakeChatGenerator());
         // FakeModelLoader.GetModelPath throws FileNotFoundException → propagates from ResolveModelPathAsync.
         await Assert.ThrowsAsync<FileNotFoundException>(() => svc.StartAsync());
     }
@@ -1063,13 +1063,13 @@ public sealed class ButlerServicePathResolutionTests
         // Contract: if DownloadModelAsync returns an empty or non-existent path
         // the service throws InvalidOperationException rather than swallowing the error.
         var badLoader = new BadPathLoader();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelId     = "Qwen3-14B-Q4",
             ModelPath   = null,
             WarmOnStart = false,
         };
-        await using var svc = new ButlerService(opts, badLoader, generatorFactory: _ => new FakeChatGenerator());
+        await using var svc = new AIService(opts, badLoader, generatorFactory: _ => new FakeChatGenerator());
         await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync());
     }
 
@@ -1080,9 +1080,9 @@ public sealed class ButlerServicePathResolutionTests
     [Fact]
     public async Task StartAsync_GeneratorFactoryReturnsNull_ThrowsInvalidOperation()
     {
-        // ButlerService guards: if generatorFactory(modelPath) returns null,
+        // AIService guards: if generatorFactory(modelPath) returns null,
         // StartAsync must throw InvalidOperationException, not NullReferenceException.
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = Path.GetTempFileName(),
             WarmOnStart = false,
@@ -1090,7 +1090,7 @@ public sealed class ButlerServicePathResolutionTests
         var tmpPath = opts.ModelPath!;
         try
         {
-            await using var svc = new ButlerService(opts, generatorFactory: _ => null!);
+            await using var svc = new AIService(opts, generatorFactory: _ => null!);
             await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync());
         }
         finally
@@ -1107,7 +1107,7 @@ public sealed class ButlerServicePathResolutionTests
     public void Constructor_NullOptions_Throws()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new ButlerService(null!));
+            new AIService(null!));
     }
 
     // ------------------------------------------------------------------
@@ -1118,7 +1118,7 @@ public sealed class ButlerServicePathResolutionTests
     /// Loader whose GetModelPath returns empty string (not cached, triggers
     /// DownloadModelAsync path) and whose DownloadModelAsync also returns an
     /// empty string — this triggers the InvalidOperationException guard in
-    /// ButlerService.ResolveModelPathAsync ("Model loader returned an invalid path").
+    /// AIService.ResolveModelPathAsync ("Model loader returned an invalid path").
     /// </summary>
     private sealed class BadPathLoader : IModelLoader
     {
@@ -1136,7 +1136,7 @@ public sealed class ButlerServicePathResolutionTests
 }
 
 // ============================================================================
-// ButlerService — DisposeAsync generator-cleanup regression test
+// AIService — DisposeAsync generator-cleanup regression test
 //
 // BUG: DisposeAsync sets _disposed = true, then calls StopAsync, which
 // immediately returns because of its "if (_disposed) return" guard —
@@ -1146,7 +1146,7 @@ public sealed class ButlerServicePathResolutionTests
 // DisposeAsync after StopAsync returns early.
 // ============================================================================
 
-public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
+public sealed class AIServiceDisposeGeneratorTests : IDisposable
 {
     private readonly string _modelPath = Path.GetTempFileName();
 
@@ -1188,8 +1188,8 @@ public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
         // then called StopAsync, which returned early because _disposed was true,
         // so the generator was NEVER disposed — leaking native llama.cpp handles.
         var tracking = new TrackingGenerator();
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        var svc  = new ButlerService(opts, generatorFactory: _ => tracking);
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        var svc  = new AIService(opts, generatorFactory: _ => tracking);
 
         await svc.StartAsync();
         Assert.False(tracking.IsDisposed); // sanity: not disposed yet
@@ -1203,8 +1203,8 @@ public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
     public async Task DisposeAsync_WhileNotStarted_DoesNotThrow()
     {
         var tracking = new TrackingGenerator();
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        var svc  = new ButlerService(opts, generatorFactory: _ => tracking);
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        var svc  = new AIService(opts, generatorFactory: _ => tracking);
 
         // Never started → generator is null → should not throw.
         var ex = await Record.ExceptionAsync(() => svc.DisposeAsync().AsTask());
@@ -1218,8 +1218,8 @@ public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
         // After DisposeAsync the service is fully torn down; StopAsync must
         // silently return (no double-dispose, no exception).
         var tracking = new TrackingGenerator();
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => tracking);
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new AIService(opts, generatorFactory: _ => tracking);
         await svc.StartAsync();
         await svc.DisposeAsync();
 
@@ -1229,11 +1229,11 @@ public sealed class ButlerServiceDisposeGeneratorTests : IDisposable
 }
 
 // ============================================================================
-// ButlerService — lifecycle contract: IsReady, restart-observer counts,
+// AIService — lifecycle contract: IsReady, restart-observer counts,
 // concurrent-start serialisation
 // ============================================================================
 
-public sealed class ButlerServiceLifecycleContractTests : IDisposable
+public sealed class AIServiceLifecycleContractTests : IDisposable
 {
     private readonly string _modelPath = Path.GetTempFileName();
 
@@ -1249,8 +1249,8 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
     [Fact]
     public async Task DisposeAsync_SetsIsReadyFalse()
     {
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        var svc  = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        var svc  = new AIService(opts, generatorFactory: _ => new FakeChatGenerator());
         await svc.StartAsync();
         Assert.True(svc.IsReady);
 
@@ -1271,13 +1271,13 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
         // After Start → Stop → Start the observer receives exactly:
         //   OnStartedAsync × 2, OnStoppedAsync × 1
         var observer = new FakeButlerObserver();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             Observer     = observer,
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await using var svc = new AIService(opts, generatorFactory: _ => new FakeChatGenerator());
 
         await svc.StartAsync();  // started: 1, stopped: 0
         await svc.StopAsync();   // started: 1, stopped: 1
@@ -1294,13 +1294,13 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
         // A second StartAsync when already started must NOT fire OnStartedAsync again —
         // the early-return guard `if (_started) return` prevents re-entry.
         var observer = new FakeButlerObserver();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             Observer     = observer,
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await using var svc = new AIService(opts, generatorFactory: _ => new FakeChatGenerator());
 
         await svc.StartAsync();
         await svc.StartAsync(); // idempotent — observer must not fire again
@@ -1318,8 +1318,8 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
         // The SemaphoreSlim(_startGate) serialises concurrent StartAsync calls so
         // the generator factory is invoked exactly once even under a race.
         var factoryCallCount = 0;
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        await using var svc = new ButlerService(opts, generatorFactory: _ =>
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new AIService(opts, generatorFactory: _ =>
         {
             Interlocked.Increment(ref factoryCallCount);
             return new FakeChatGenerator();
@@ -1341,8 +1341,8 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
     [Fact]
     public async Task RestartCycle_ChatAsync_WorksCorrectlyAfterThreeRestarts()
     {
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator("ok"));
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new AIService(opts, generatorFactory: _ => new FakeChatGenerator("ok"));
 
         for (var i = 0; i < 3; i++)
         {
@@ -1356,10 +1356,10 @@ public sealed class ButlerServiceLifecycleContractTests : IDisposable
 }
 
 // ============================================================================
-// ButlerService — edge-case behavioral contracts
+// AIService — edge-case behavioral contracts
 // ============================================================================
 
-public sealed class ButlerServiceEdgeCaseTests : IDisposable
+public sealed class AIServiceEdgeCaseTests : IDisposable
 {
     private readonly string _modelPath = Path.GetTempFileName();
 
@@ -1381,14 +1381,14 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     public async Task StreamAsync_EmptyGeneratorOutput_CompletedFired_StartedNotFired()
     {
         var observer = new FakeButlerObserver();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = false,
             Observer     = observer,
         };
         // FakeChatGenerator with an explicitly empty stream-chunks array.
-        await using var svc = new ButlerService(opts,
+        await using var svc = new AIService(opts,
             generatorFactory: _ => new FakeChatGenerator("", Array.Empty<string>()));
         await svc.StartAsync();
 
@@ -1411,7 +1411,7 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     // ------------------------------------------------------------------
     // InvokeToolAsync: non-OCE from bridge propagates to the caller.
     //
-    // ButlerService.InvokeToolAsync has no try/catch around the bridge
+    // AIService.InvokeToolAsync has no try/catch around the bridge
     // call — exceptions (other than OCE) surface to the caller unchanged.
     // This is by design: the bridge is expected to return ToolResult
     // failures, not throw.  A thrown exception signals a code bug.
@@ -1421,13 +1421,13 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     public async Task InvokeToolAsync_BridgeThrowsException_PropagatesUnwrapped()
     {
         var bridge = new ExplodingToolBridge();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
             ToolBridge  = bridge,
         };
-        await using var svc = new ButlerService(opts, generatorFactory: _ => new FakeChatGenerator());
+        await using var svc = new AIService(opts, generatorFactory: _ => new FakeChatGenerator());
         await svc.StartAsync();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -1449,12 +1449,12 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     [Fact]
     public async Task ChatAsync_GeneratorThrowsNonOCE_ExceptionPropagates()
     {
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
         };
-        await using var svc = new ButlerService(opts,
+        await using var svc = new AIService(opts,
             generatorFactory: _ => new AlwaysThrowingGenerator());
         await svc.StartAsync();
 
@@ -1474,12 +1474,12 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     [Fact]
     public async Task StreamAsync_GeneratorStreamThrows_ExceptionPropagates()
     {
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
         };
-        await using var svc = new ButlerService(opts,
+        await using var svc = new AIService(opts,
             generatorFactory: _ => new StreamThrowingGenerator());
         await svc.StartAsync();
 
@@ -1492,7 +1492,7 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     // ------------------------------------------------------------------
     // WarmOnStart + OperationCanceledException propagation
     //
-    // ButlerService.StartAsync has an explicit:
+    // AIService.StartAsync has an explicit:
     //   catch (OperationCanceledException) { throw; }
     // around WarmUpAsync so that OCE is NEVER silently swallowed —
     // a pre-cancelled startup token must abort the entire StartAsync.
@@ -1509,13 +1509,13 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
     [Fact]
     public async Task WarmOnStart_GeneratorThrowsOce_PropagatesFromStartAsync()
     {
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath    = _modelPath,
             WarmOnStart  = true,
             SystemPrompt = "sys",
         };
-        await using var svc = new ButlerService(opts,
+        await using var svc = new AIService(opts,
             generatorFactory: _ => new WarmupOceGenerator());
 
         // StartAsync must propagate the OCE — NOT swallow it as it does for
@@ -1631,7 +1631,7 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
 }
 
 // ============================================================================
-// ButlerService — StreamAsync behavioral contracts not covered elsewhere
+// AIService — StreamAsync behavioral contracts not covered elsewhere
 //
 // Four gaps identified after full audit:
 //   1. Caller-supplied GenerationOptions must override service defaults in
@@ -1645,7 +1645,7 @@ public sealed class ButlerServiceEdgeCaseTests : IDisposable
 //      — observers must NOT assume the Completed event is always delivered.
 // ============================================================================
 
-public sealed class ButlerServiceStreamContractTests : IDisposable
+public sealed class AIServiceStreamContractTests : IDisposable
 {
     private readonly string _modelPath = Path.GetTempFileName();
 
@@ -1664,13 +1664,13 @@ public sealed class ButlerServiceStreamContractTests : IDisposable
         var defaultOpts = new GenerationOptions { MaxTokens = 128, Temperature = 0.1f };
         var callerOpts  = new GenerationOptions { MaxTokens = 512, Temperature = 0.9f };
         var generator   = new FakeChatGenerator("r", streamChunks: new[] { "r" });
-        var butlerOpts  = new ButlerOptions
+        var butlerOpts  = new AIOptions
         {
             ModelPath                = _modelPath,
             WarmOnStart              = false,
             DefaultGenerationOptions = defaultOpts,
         };
-        await using var svc = new ButlerService(butlerOpts, generatorFactory: _ => generator);
+        await using var svc = new AIService(butlerOpts, generatorFactory: _ => generator);
         await svc.StartAsync();
 
         await foreach (var _ in svc.StreamAsync(
@@ -1684,7 +1684,7 @@ public sealed class ButlerServiceStreamContractTests : IDisposable
     // ------------------------------------------------------------------
     // 2. Both stream observer events carry the same correlationId
     //
-    // ButlerService assigns one Guid.NewGuid() per StreamAsync call and
+    // AIService assigns one Guid.NewGuid() per StreamAsync call and
     // passes it to both OnStreamStartedAsync and OnStreamCompletedAsync.
     // Downstream analytics/billing systems rely on this to join the two
     // events — they must never see mismatched IDs.
@@ -1694,13 +1694,13 @@ public sealed class ButlerServiceStreamContractTests : IDisposable
     public async Task StreamAsync_StartedAndCompletedEvents_ShareCorrelationId()
     {
         var observer = new FakeButlerObserver();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
             Observer    = observer,
         };
-        await using var svc = new ButlerService(opts,
+        await using var svc = new AIService(opts,
             generatorFactory: _ => new FakeChatGenerator("r", new[] { "a", "b" }));
         await svc.StartAsync();
 
@@ -1729,8 +1729,8 @@ public sealed class ButlerServiceStreamContractTests : IDisposable
     [Fact]
     public async Task StopAsync_WhileStreamAsyncBlocking_CancelsPendingStream()
     {
-        var butlerOpts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        await using var svc = new ButlerService(butlerOpts,
+        var butlerOpts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        await using var svc = new AIService(butlerOpts,
             generatorFactory: _ => new InfiniteBlockingStreamGenerator());
 
         await svc.StartAsync();
@@ -1754,7 +1754,7 @@ public sealed class ButlerServiceStreamContractTests : IDisposable
     // ------------------------------------------------------------------
     // 4. OnStreamCompletedAsync is NOT fired when the stream is cancelled
     //
-    // The ButlerService.StreamAsync async iterator has no try/finally around
+    // The AIService.StreamAsync async iterator has no try/finally around
     // OnStreamCompletedAsync — when OCE escapes the `await foreach` the
     // iterator simply unwinds without reaching the Completed call.
     // Observers must NOT assume Completed always balances Started.
@@ -1764,13 +1764,13 @@ public sealed class ButlerServiceStreamContractTests : IDisposable
     public async Task StreamAsync_CancelledMidStream_CompletedEventNotFired()
     {
         var observer = new FakeButlerObserver();
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
             Observer    = observer,
         };
-        await using var svc = new ButlerService(opts,
+        await using var svc = new AIService(opts,
             generatorFactory: _ => new InfiniteBlockingStreamGenerator());
         await svc.StartAsync();
 

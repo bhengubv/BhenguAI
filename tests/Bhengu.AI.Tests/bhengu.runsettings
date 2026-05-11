@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Prevents vstest from timing out on first connection.            -->
+    <!-- Matches the VSTEST_CONNECTION_TIMEOUT=180 env var workaround.  -->
+    <TestSessionTimeout>180000</TestSessionTimeout>
+  </RunConfiguration>
+</RunSettings>

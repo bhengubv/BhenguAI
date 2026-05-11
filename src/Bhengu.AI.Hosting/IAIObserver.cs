@@ -1,4 +1,4 @@
-// IButlerObserver.cs
+﻿// IAIObserver.cs
 //
 // Neutral observability hook. Consumers of this interface receive lifecycle
 // and inference events from the butler service WITHOUT any Karma / Qi logic
@@ -6,7 +6,7 @@
 // private repo) wires its own implementation here — BhenguAI stays clean.
 //
 // All methods have default no-op implementations so partial observers are
-// trivial to write. Observer exceptions are caught by ButlerService and
+// trivial to write. Observer exceptions are caught by AIService and
 // logged; they never propagate to the caller.
 
 using System;
@@ -23,7 +23,7 @@ namespace Bhengu.AI.Hosting;
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// Payload delivered to <see cref="IButlerObserver.OnChatCompletedAsync"/>.
+/// Payload delivered to <see cref="IAIObserver.OnChatCompletedAsync"/>.
 /// Carries the full conversation and the model's reply.
 /// </summary>
 /// <param name="CorrelationId">Per-call GUID for end-to-end tracing.</param>
@@ -31,7 +31,7 @@ namespace Bhengu.AI.Hosting;
 /// <param name="Response">The complete response text.</param>
 /// <param name="Elapsed">Wall-clock time from first token to last token.</param>
 /// <param name="Timestamp">UTC moment the call completed.</param>
-public sealed record ButlerChatEvent(
+public sealed record AIChatEvent(
     Guid CorrelationId,
     IReadOnlyList<ChatMessage> Messages,
     string Response,
@@ -39,8 +39,8 @@ public sealed record ButlerChatEvent(
     DateTimeOffset Timestamp);
 
 /// <summary>
-/// Payload delivered to <see cref="IButlerObserver.OnStreamStartedAsync"/> and
-/// <see cref="IButlerObserver.OnStreamCompletedAsync"/>.
+/// Payload delivered to <see cref="IAIObserver.OnStreamStartedAsync"/> and
+/// <see cref="IAIObserver.OnStreamCompletedAsync"/>.
 /// </summary>
 /// <param name="CorrelationId">Per-call GUID for end-to-end tracing.</param>
 /// <param name="Messages">The input messages passed to the generator.</param>
@@ -53,7 +53,7 @@ public sealed record ButlerChatEvent(
 /// For <c>OnStreamCompleted</c>: number of tokens yielded.
 /// </param>
 /// <param name="Timestamp">UTC moment of the event.</param>
-public sealed record ButlerStreamEvent(
+public sealed record AIStreamEvent(
     Guid CorrelationId,
     IReadOnlyList<ChatMessage> Messages,
     TimeSpan Elapsed,
@@ -61,14 +61,14 @@ public sealed record ButlerStreamEvent(
     DateTimeOffset Timestamp);
 
 /// <summary>
-/// Payload delivered to <see cref="IButlerObserver.OnToolInvokedAsync"/>.
+/// Payload delivered to <see cref="IAIObserver.OnToolInvokedAsync"/>.
 /// </summary>
 /// <param name="CorrelationId">Per-call GUID for end-to-end tracing.</param>
 /// <param name="Invocation">The tool call that was dispatched.</param>
 /// <param name="Result">The result returned by the tool bridge.</param>
 /// <param name="Elapsed">Wall-clock time for the tool call.</param>
 /// <param name="Timestamp">UTC moment the call completed.</param>
-public sealed record ButlerToolEvent(
+public sealed record AIToolEvent(
     Guid CorrelationId,
     ToolInvocation Invocation,
     ToolResult Result,
@@ -80,7 +80,7 @@ public sealed record ButlerToolEvent(
 // ---------------------------------------------------------------------------
 
 /// <summary>
-/// Observability hook for <see cref="ButlerService"/>. Receives lifecycle and
+/// Observability hook for <see cref="AIService"/>. Receives lifecycle and
 /// inference events. All methods are optional (default = no-op) and must
 /// complete quickly — long-running work should be dispatched to a background
 /// channel inside the implementation.
@@ -92,7 +92,7 @@ public sealed record ButlerToolEvent(
 /// </para>
 /// <para>
 /// <b>Error isolation:</b> Exceptions thrown by observer methods are caught
-/// by <see cref="ButlerService"/> and logged. They never propagate to the
+/// by <see cref="AIService"/> and logged. They never propagate to the
 /// caller of the butler.
 /// </para>
 /// <para>
@@ -101,7 +101,7 @@ public sealed record ButlerToolEvent(
 /// analytics — all without modifying BhenguAI source.
 /// </para>
 /// </remarks>
-public interface IButlerObserver
+public interface IAIObserver
 {
     /// <summary>Called once after the model has loaded and Butler is ready.</summary>
     ValueTask OnStartedAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
@@ -113,28 +113,28 @@ public interface IButlerObserver
     /// Called after a complete (non-streaming) chat response has been generated
     /// and returned to the caller.
     /// </summary>
-    ValueTask OnChatCompletedAsync(ButlerChatEvent @event, CancellationToken ct = default)
+    ValueTask OnChatCompletedAsync(AIChatEvent @event, CancellationToken ct = default)
         => ValueTask.CompletedTask;
 
     /// <summary>
     /// Called when a streaming response emits its first token.
-    /// <see cref="ButlerStreamEvent.TokenCount"/> is <c>0</c> at this point.
+    /// <see cref="AIStreamEvent.TokenCount"/> is <c>0</c> at this point.
     /// </summary>
-    ValueTask OnStreamStartedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+    ValueTask OnStreamStartedAsync(AIStreamEvent @event, CancellationToken ct = default)
         => ValueTask.CompletedTask;
 
     /// <summary>
     /// Called after a streaming response has finished (all tokens yielded, or
-    /// the stream was cancelled). <see cref="ButlerStreamEvent.TokenCount"/>
+    /// the stream was cancelled). <see cref="AIStreamEvent.TokenCount"/>
     /// holds the number of tokens that were emitted before completion.
     /// </summary>
-    ValueTask OnStreamCompletedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+    ValueTask OnStreamCompletedAsync(AIStreamEvent @event, CancellationToken ct = default)
         => ValueTask.CompletedTask;
 
     /// <summary>
     /// Called after a tool invocation has completed (success or failure).
-    /// Check <see cref="ToolResult.Success"/> inside <see cref="ButlerToolEvent.Result"/>.
+    /// Check <see cref="ToolResult.Success"/> inside <see cref="AIToolEvent.Result"/>.
     /// </summary>
-    ValueTask OnToolInvokedAsync(ButlerToolEvent @event, CancellationToken ct = default)
+    ValueTask OnToolInvokedAsync(AIToolEvent @event, CancellationToken ct = default)
         => ValueTask.CompletedTask;
 }

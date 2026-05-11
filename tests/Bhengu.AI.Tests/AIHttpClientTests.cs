@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -12,10 +12,10 @@ using Xunit;
 namespace Bhengu.AI.Tests;
 
 // ============================================================================
-// ButlerHttpClient — constructor guards (no network needed)
+// AIHttpClient — constructor guards (no network needed)
 // ============================================================================
 
-public sealed class ButlerHttpClientConstructorTests
+public sealed class AIHttpClientConstructorTests
 {
     [Theory]
     [InlineData(0)]
@@ -23,32 +23,32 @@ public sealed class ButlerHttpClientConstructorTests
     [InlineData(-9999)]
     public void Constructor_InvalidPort_ThrowsArgumentOutOfRange(int port)
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ButlerHttpClient(port, "valid-token"));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new AIHttpClient(port, "valid-token"));
     }
 
     [Fact]
     public void Constructor_NullToken_ThrowsArgumentNullException()
     {
         // ArgumentException.ThrowIfNullOrEmpty raises ArgumentNullException for null.
-        Assert.Throws<ArgumentNullException>(() => new ButlerHttpClient(8080, null!));
+        Assert.Throws<ArgumentNullException>(() => new AIHttpClient(8080, null!));
     }
 
     [Fact]
     public void Constructor_EmptyToken_ThrowsArgumentException()
     {
-        Assert.Throws<ArgumentException>(() => new ButlerHttpClient(8080, ""));
+        Assert.Throws<ArgumentException>(() => new AIHttpClient(8080, ""));
     }
 
     [Fact]
     public void Constructor_NullHttpClient_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => new ButlerHttpClient(null!, ownsClient: false));
+        Assert.Throws<ArgumentNullException>(() => new AIHttpClient(null!, ownsClient: false));
     }
 
     [Fact]
     public void Constructor_ValidPort_Succeeds()
     {
-        using var client = new ButlerHttpClient(8080, "some-token");
+        using var client = new AIHttpClient(8080, "some-token");
         Assert.NotNull(client);
     }
 
@@ -56,7 +56,7 @@ public sealed class ButlerHttpClientConstructorTests
     public void Dispose_IsIdempotent()
     {
         using var http = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:9999/") };
-        var client = new ButlerHttpClient(http, ownsClient: false);
+        var client = new AIHttpClient(http, ownsClient: false);
         client.Dispose();
         var ex = Record.Exception(() => client.Dispose());
         Assert.Null(ex);
@@ -64,16 +64,16 @@ public sealed class ButlerHttpClientConstructorTests
 }
 
 // ============================================================================
-// ButlerHttpClient — argument guards (no server needed, just immediate throws)
+// AIHttpClient — argument guards (no server needed, just immediate throws)
 // ============================================================================
 
-public sealed class ButlerHttpClientArgTests
+public sealed class AIHttpClientArgTests
 {
     [Fact]
     public async Task AskAsync_NullOrEmptyQuestion_ThrowsArgumentException()
     {
         // The throw happens before any network call so no live server is needed.
-        using var client = new ButlerHttpClient(9999, "tok");
+        using var client = new AIHttpClient(9999, "tok");
         await Assert.ThrowsAnyAsync<ArgumentException>(() => client.AskAsync(null!));
         await Assert.ThrowsAnyAsync<ArgumentException>(() => client.AskAsync(""));
     }
@@ -81,7 +81,7 @@ public sealed class ButlerHttpClientArgTests
     [Fact]
     public async Task ChatAsync_NullMessages_ThrowsArgumentNullException()
     {
-        using var client = new ButlerHttpClient(9999, "tok");
+        using var client = new AIHttpClient(9999, "tok");
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             client.ChatAsync(null!));
     }
@@ -89,42 +89,42 @@ public sealed class ButlerHttpClientArgTests
     [Fact]
     public async Task InvokeToolAsync_NullInvocation_ThrowsArgumentNullException()
     {
-        using var client = new ButlerHttpClient(9999, "tok");
+        using var client = new AIHttpClient(9999, "tok");
         await Assert.ThrowsAsync<ArgumentNullException>(() =>
             client.InvokeToolAsync(null!));
     }
 }
 
 // ============================================================================
-// ButlerHttpClient — integration tests against a live HttpLoopbackEndpoint
+// AIHttpClient — integration tests against a live HttpLoopbackEndpoint
 // ============================================================================
 
-public sealed class ButlerHttpClientIntegrationTests : IAsyncLifetime
+public sealed class AIHttpClientIntegrationTests : IAsyncLifetime
 {
     private readonly string _modelPath = Path.GetTempFileName();
     private readonly FakeChatGenerator _generator =
         new("http-client-reply", new[] { "http", "-", "chunk" });
 
-    private ButlerService? _service;
+    private AIService? _service;
     private HttpLoopbackEndpoint? _endpoint;
-    private ButlerHttpClient? _client;
+    private AIHttpClient? _client;
 
     public async Task InitializeAsync()
     {
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelPath   = _modelPath,
             WarmOnStart = false,
             ToolBridge  = new FakeToolBridge(
                 new ToolResult { ToolName = "fake", Success = true, Result = "42" }),
         };
-        _service = new ButlerService(opts, generatorFactory: _ => _generator);
+        _service = new AIService(opts, generatorFactory: _ => _generator);
         await _service.StartAsync();
 
-        _endpoint = new HttpLoopbackEndpoint(new ButlerOptions { ModelPath = _modelPath });
+        _endpoint = new HttpLoopbackEndpoint(new AIOptions { ModelPath = _modelPath });
         await _endpoint.StartAsync(_service);
 
-        _client = new ButlerHttpClient(_endpoint.BoundPort, _endpoint.Token!);
+        _client = new AIHttpClient(_endpoint.BoundPort, _endpoint.Token!);
     }
 
     public async Task DisposeAsync()
