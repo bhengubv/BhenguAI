@@ -1,6 +1,6 @@
-// HttpLoopbackEndpoint.cs
+﻿// HttpLoopbackEndpoint.cs
 //
-// Tiny HTTP server that exposes a ButlerService to other processes on the
+// Tiny HTTP server that exposes a AIService to other processes on the
 // same host (e.g. a CircleOS keyboard talking to a CircleOS background
 // service). Implementation is built on System.Net.HttpListener so we have
 // zero ASP.NET Core dependency and stay portable across Linux / macOS /
@@ -13,7 +13,7 @@
 //   POST /butler/tool   -> { "toolName": string, "arguments": {...} }          -> ToolResult JSON
 //
 // Authentication is a shared-secret header `X-Butler-Token`. Configure via
-// ButlerOptions.LoopbackToken; when not set, the endpoint generates a
+// AIOptions.LoopbackToken; when not set, the endpoint generates a
 // random token at startup and exposes it via Token.
 
 using System;
@@ -33,10 +33,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Bhengu.AI.Hosting.Endpoints;
 
 /// <summary>
-/// Loopback HTTP transport for <see cref="IButlerService"/>. Binds only to
+/// Loopback HTTP transport for <see cref="IAIService"/>. Binds only to
 /// <c>127.0.0.1</c> so we never expose Butler on the network.
 /// </summary>
-public sealed class HttpLoopbackEndpoint : IButlerEndpoint
+public sealed class HttpLoopbackEndpoint : IAIEndpoint
 {
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
@@ -44,13 +44,13 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
         PropertyNameCaseInsensitive = true,
     };
 
-    private readonly ButlerOptions _options;
+    private readonly AIOptions _options;
     private readonly ILogger<HttpLoopbackEndpoint> _logger;
 
     private HttpListener? _listener;
     private CancellationTokenSource? _serverCts;
     private Task? _acceptLoop;
-    private IButlerService? _service;
+    private IAIService? _service;
     private string? _token;
     private int _boundPort;
     private bool _started;
@@ -60,7 +60,7 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
     /// Constructs the endpoint without starting it. Call <see cref="StartAsync"/>
     /// to bind and begin serving.
     /// </summary>
-    public HttpLoopbackEndpoint(ButlerOptions options, ILogger<HttpLoopbackEndpoint>? logger = null)
+    public HttpLoopbackEndpoint(AIOptions options, ILogger<HttpLoopbackEndpoint>? logger = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? NullLogger<HttpLoopbackEndpoint>.Instance;
@@ -77,7 +77,7 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
     public string? Token => _token;
 
     /// <inheritdoc />
-    public async Task StartAsync(IButlerService service, CancellationToken ct = default)
+    public async Task StartAsync(IAIService service, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(service);
@@ -85,7 +85,7 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
 
         _service = service;
         _token = string.IsNullOrEmpty(_options.LoopbackToken)
-            ? ButlerOptions.GenerateRandomToken()
+            ? AIOptions.GenerateRandomToken()
             : _options.LoopbackToken;
 
         var configuredPort = _options.LoopbackPort;
@@ -403,7 +403,7 @@ public sealed class HttpLoopbackEndpoint : IButlerEndpoint
         return diff == 0;
     }
 
-    private IButlerService RequireService()
+    private IAIService RequireService()
     {
         return _service
             ?? throw new InvalidOperationException("HttpLoopbackEndpoint has no service bound.");

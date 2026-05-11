@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Bhengu.AI.Embeddings;
+using Bhengu.AI.Core;
 using Xunit;
 
 namespace Bhengu.AI.Tests;
@@ -63,16 +64,70 @@ public sealed class TextEmbedderTests
     }
 
     // -----------------------------------------------------------------------
-    // GenerateAsync — pending backend stub
+    // GenerateAsync — factory-injection path (no native library required)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public async Task GenerateAsync_ValidText_ThrowsNotSupportedException()
+    public async Task GenerateAsync_WithFakeBackend_ReturnsFloatArray()
     {
-        using var embedder = new TextEmbedder(new FakeModelManager(), new byte[] { 0x01 });
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() =>
-            embedder.GenerateAsync("hello world"));
-        Assert.Contains("sovereign", ex.Message, StringComparison.OrdinalIgnoreCase);
+        // The internal constructor accepts a factory so tests bypass the
+        // native llama.cpp backend.
+        var mgr = new FakeModelManager();
+        using var embedder = new TextEmbedder(
+            mgr,
+            new byte[] { 0x01 },
+            _ => new FakeEmbeddingBackend(dimension: 4));
+
+        var result = await embedder.GenerateAsync("hello world");
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.Length);
+        // The FakeEmbeddingBackend returns L2-normalised vectors so the
+        // magnitude must be approximately 1.
+        double norm = 0;
+        foreach (var x in result) norm += (double)x * x;
+        Assert.InRange(Math.Sqrt(norm), 0.99, 1.01);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_WithFakeBackend_ConcurrentCalls_UseSameBackend()
+    {
+        // Verify the semaphore + lazy-init path handles concurrent callers.
+        var mgr = new FakeModelManager();
+        int factoryCallCount = 0;
+
+        using var embedder = new TextEmbedder(
+            mgr,
+            new byte[] { 0x01 },
+            _ =>
+            {
+                System.Threading.Interlocked.Increment(ref factoryCallCount);
+                return new FakeEmbeddingBackend(4);
+            });
+
+        // Fire 5 concurrent calls.
+        var tasks = new Task<float[]>[5];
+        for (int i = 0; i < tasks.Length; i++)
+            tasks[i] = embedder.GenerateAsync("ping");
+
+        await Task.WhenAll(tasks);
+
+        // Factory must have been called exactly once regardless of concurrency.
+        Assert.Equal(1, factoryCallCount);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_ProductionPath_ThrowsWhenModelFileMissing()
+    {
+        // The public (production) constructor uses LlamaEmbeddingBackend.
+        // With FakeModelManager returning a non-existent path, the backend
+        // constructor throws FileNotFoundException.
+        using var embedder = new TextEmbedder(
+            new FakeModelManager("nonexistent/model.gguf"),
+            new byte[] { 0x01 });
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
+            embedder.GenerateAsync("hello"));
     }
 
     // -----------------------------------------------------------------------

@@ -166,4 +166,29 @@ public sealed class VectorMathTests
         var result = SimdOps.CosineSimilarity(a, b);
         Assert.Equal(-1f, result, precision: 4);
     }
+
+    [Fact]
+    public void SimdOps_DifferentLengths_Throws()
+    {
+        float[] a = { 1f, 2f, 3f };
+        float[] b = { 1f, 2f };
+        Assert.Throws<ArgumentException>(() => SimdOps.CosineSimilarity(a, b));
+    }
+
+    [Fact]
+    public void SimdOps_EmptyVectors_Throws()
+    {
+        float[] empty = Array.Empty<float>();
+        Assert.Throws<ArgumentException>(() => SimdOps.CosineSimilarity(empty, empty));
+    }
+
+    [Fact]
+    public void SimdOps_LargeVectorDifferentLength_Throws()
+    {
+        // Ensures the length guard triggers even when vectors are longer
+        // than one SIMD lane (previously could access b[i] past its end).
+        var a = new float[256];
+        var b = new float[255];
+        Assert.Throws<ArgumentException>(() => SimdOps.CosineSimilarity(a, b));
+    }
 }

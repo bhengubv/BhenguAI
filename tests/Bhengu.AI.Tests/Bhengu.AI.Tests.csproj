@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)bhengu.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,8 +26,11 @@
     <ProjectReference Include="..\..\src\Bhengu.AI.Embeddings\Bhengu.AI.Embeddings.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Hosting\Bhengu.AI.Hosting.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Inference\Bhengu.AI.Inference.csproj" />
+    <ProjectReference Include="..\..\src\Bhengu.AI.Memory\Bhengu.AI.Memory.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Search\Bhengu.AI.Search.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Tools\Bhengu.AI.Tools.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Voice\Bhengu.AI.Voice.csproj" />
+    <ProjectReference Include="..\..\src\Bhengu.AI.Maui\Bhengu.AI.Maui.csproj" />
+    <ProjectReference Include="..\..\src\Bhengu.AI.Skills\Bhengu.AI.Skills.csproj" />
   </ItemGroup>
 </Project>

@@ -58,10 +58,11 @@ public sealed class TranscribedEventArgs : EventArgs
 
 /// <summary>
 /// Convenience composition of <see cref="IWakeWordDetector"/>,
-/// <see cref="IAudioCapture"/>, and <see cref="IVoiceTranscriber"/>.
-/// On wake-word detection the pipeline starts capturing audio, feeds the
-/// chunks to the transcriber, and raises <see cref="Transcribed"/> with the
-/// final <see cref="TranscriptionResult"/>.
+/// <see cref="IAudioCapture"/>, <see cref="IVoiceTranscriber"/>, and
+/// optionally <see cref="IVoiceActivityDetector"/> and <see cref="ITtsEngine"/>.
+/// On wake-word detection the pipeline starts capturing audio, optionally
+/// filters it through VAD, feeds the speech chunks to the transcriber, and
+/// raises <see cref="Transcribed"/> with the final <see cref="TranscriptionResult"/>.
 /// </summary>
 /// <remarks>
 /// The pipeline does not own the wake-word lifecycle: callers must invoke
@@ -73,6 +74,7 @@ public sealed class VoicePipeline : IAsyncDisposable
     private readonly IWakeWordDetector _wake;
     private readonly IVoiceTranscriber _transcriber;
     private readonly IAudioCapture _capture;
+    private readonly IVoiceActivityDetector? _vad;
     private readonly Lock _gate = new();
     private CancellationTokenSource? _activationCts;
     private bool _disposed;
@@ -86,7 +88,24 @@ public sealed class VoicePipeline : IAsyncDisposable
     /// Audio capture source. When <c>null</c>, a <see cref="NullAudioCapture"/>
     /// is used (no audio is fed to the transcriber).
     /// </param>
-    public VoicePipeline(IWakeWordDetector wake, IVoiceTranscriber transcriber, IAudioCapture? capture = null)
+    /// <param name="vad">
+    /// Optional voice activity detector. When non-null, raw audio is piped
+    /// through <see cref="IVoiceActivityDetector.DetectAsync"/> and only chunks
+    /// with <see cref="VadSegment.IsSpeech"/> set to <c>true</c> are forwarded
+    /// to the transcriber. When <c>null</c>, all captured audio is forwarded
+    /// directly (original behaviour).
+    /// </param>
+    /// <param name="tts">
+    /// Optional TTS engine. When set, it is exposed via <see cref="TtsEngine"/>
+    /// so that the host can synthesise responses after a transcription. The
+    /// pipeline itself does not invoke TTS — that is the caller's responsibility.
+    /// </param>
+    public VoicePipeline(
+        IWakeWordDetector wake,
+        IVoiceTranscriber transcriber,
+        IAudioCapture? capture = null,
+        IVoiceActivityDetector? vad = null,
+        ITtsEngine? tts = null)
     {
         ArgumentNullException.ThrowIfNull(wake);
         ArgumentNullException.ThrowIfNull(transcriber);
@@ -94,6 +113,8 @@ public sealed class VoicePipeline : IAsyncDisposable
         _wake = wake;
         _transcriber = transcriber;
         _capture = capture ?? new NullAudioCapture();
+        _vad = vad;
+        TtsEngine = tts;
         _wake.WakeWordDetected += OnWakeWordDetected;
     }
 
@@ -116,6 +137,21 @@ public sealed class VoicePipeline : IAsyncDisposable
 
     /// <summary>The audio capture source this pipeline reads from.</summary>
     public IAudioCapture AudioCapture => _capture;
+
+    /// <summary>
+    /// The optional TTS engine supplied at construction. <c>null</c> when no
+    /// TTS backend was provided. The host is responsible for calling
+    /// <see cref="ITtsEngine.SynthesiseAsync"/> or
+    /// <see cref="ITtsEngine.StreamSynthesiseAsync"/> after a transcription
+    /// event to produce spoken responses.
+    /// </summary>
+    public ITtsEngine? TtsEngine { get; }
+
+    /// <summary>
+    /// The optional voice activity detector supplied at construction.
+    /// <c>null</c> when VAD is not active (all audio forwarded to transcriber).
+    /// </summary>
+    public IVoiceActivityDetector? VoiceActivityDetector => _vad;
 
     /// <summary>
     /// Begin listening for the wake word. Delegates to
@@ -160,8 +196,15 @@ public sealed class VoicePipeline : IAsyncDisposable
     {
         try
         {
+            // When VAD is configured, pipe raw audio through it and only pass
+            // speech segments (IsSpeech == true) to the transcriber.  When VAD
+            // is absent, forward the raw capture stream directly (original behaviour).
+            IAsyncEnumerable<ReadOnlyMemory<byte>> audioInput = _vad is null
+                ? _capture.CaptureAsync(ct)
+                : ExtractSpeechSegmentsAsync(_vad, _capture.CaptureAsync(ct), ct);
+
             var result = await _transcriber
-                .StreamTranscribeAsync(_capture.CaptureAsync(ct), ct)
+                .StreamTranscribeAsync(audioInput, ct)
                 .ToFinalAsync(ct)
                 .ConfigureAwait(false);
 
@@ -183,6 +226,25 @@ public sealed class VoicePipeline : IAsyncDisposable
         catch (Exception ex)
         {
             ActivationFailed?.Invoke(this, ex);
+        }
+    }
+
+    /// <summary>
+    /// Filters <paramref name="rawAudio"/> through <paramref name="vad"/> and
+    /// yields only the audio bytes from segments where
+    /// <see cref="VadSegment.IsSpeech"/> is <c>true</c>.
+    /// </summary>
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ExtractSpeechSegmentsAsync(
+        IVoiceActivityDetector vad,
+        IAsyncEnumerable<ReadOnlyMemory<byte>> rawAudio,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        await foreach (var segment in vad.DetectAsync(rawAudio, ct).ConfigureAwait(false))
+        {
+            if (segment.IsSpeech)
+            {
+                yield return segment.Audio;
+            }
         }
     }
 

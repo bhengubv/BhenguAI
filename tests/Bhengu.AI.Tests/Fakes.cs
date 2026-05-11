@@ -1,12 +1,14 @@
-// Shared test doubles — no mocking libraries, no external deps.
+﻿// Shared test doubles — no mocking libraries, no external deps.
 
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Bhengu.AI.Core;
+using Bhengu.AI.Embeddings;
 using Bhengu.AI.Hosting;
 using Bhengu.AI.Inference;
+using Bhengu.AI.Memory;
 using Bhengu.AI.Tools;
 using Bhengu.AI.Voice;
 
@@ -144,10 +146,10 @@ internal sealed class FakeToolBridge : IToolBridge
 }
 
 // ---------------------------------------------------------------------------
-// IButlerObserver
+// IAIObserver
 // ---------------------------------------------------------------------------
 
-internal sealed class FakeButlerObserver : IButlerObserver
+internal sealed class FakeButlerObserver : IAIObserver
 {
     public int StartedCount { get; private set; }
     public int StoppedCount { get; private set; }
@@ -156,10 +158,10 @@ internal sealed class FakeButlerObserver : IButlerObserver
     public int StreamCompletedCount { get; private set; }
     public int ToolInvokedCount { get; private set; }
 
-    public ButlerChatEvent? LastChatEvent { get; private set; }
-    public ButlerStreamEvent? LastStreamStartedEvent { get; private set; }
-    public ButlerStreamEvent? LastStreamCompletedEvent { get; private set; }
-    public ButlerToolEvent? LastToolEvent { get; private set; }
+    public AIChatEvent? LastChatEvent { get; private set; }
+    public AIStreamEvent? LastStreamStartedEvent { get; private set; }
+    public AIStreamEvent? LastStreamCompletedEvent { get; private set; }
+    public AIToolEvent? LastToolEvent { get; private set; }
 
     /// <summary>When true the observer throws, to test isolation.</summary>
     public bool ThrowOnNext { get; set; }
@@ -177,28 +179,28 @@ internal sealed class FakeButlerObserver : IButlerObserver
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask OnChatCompletedAsync(ButlerChatEvent @event, CancellationToken ct = default)
+    public ValueTask OnChatCompletedAsync(AIChatEvent @event, CancellationToken ct = default)
     {
         ChatCompletedCount++;
         LastChatEvent = @event;
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask OnStreamStartedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+    public ValueTask OnStreamStartedAsync(AIStreamEvent @event, CancellationToken ct = default)
     {
         StreamStartedCount++;
         LastStreamStartedEvent = @event;
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask OnStreamCompletedAsync(ButlerStreamEvent @event, CancellationToken ct = default)
+    public ValueTask OnStreamCompletedAsync(AIStreamEvent @event, CancellationToken ct = default)
     {
         StreamCompletedCount++;
         LastStreamCompletedEvent = @event;
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask OnToolInvokedAsync(ButlerToolEvent @event, CancellationToken ct = default)
+    public ValueTask OnToolInvokedAsync(AIToolEvent @event, CancellationToken ct = default)
     {
         ToolInvokedCount++;
         LastToolEvent = @event;
@@ -349,6 +351,156 @@ internal sealed class FakeModelManager : IModelManager
 
     public Task<bool> VerifyModelAsync(string modelPath, byte[] expectedChecksum, CancellationToken ct = default)
         => Task.FromResult(true);
+
+    public void Dispose() { }
+}
+
+// ---------------------------------------------------------------------------
+// IEmbeddingBackend (internal — needs InternalsVisibleTo from Embeddings)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Fake embedding backend. Returns a fixed float[] of configurable dimension.
+/// Used to test TextEmbedder without the native llama.cpp library.
+/// </summary>
+internal sealed class FakeEmbeddingBackend : IEmbeddingBackend
+{
+    private readonly float[] _vector;
+    private bool _disposed;
+
+    public FakeEmbeddingBackend(int dimension = 4)
+    {
+        _vector = new float[dimension];
+        // Fill with a simple pattern so all dimensions are non-zero.
+        for (int i = 0; i < dimension; i++) _vector[i] = 1f / (i + 1);
+        // L2-normalise.
+        double norm = 0;
+        foreach (var x in _vector) norm += (double)x * x;
+        norm = Math.Sqrt(norm);
+        if (norm > 1e-12) for (int i = 0; i < dimension; i++) _vector[i] /= (float)norm;
+    }
+
+    public int Dimension => _vector.Length;
+
+    public float[] Embed(string text)
+    {
+        if (_disposed) throw new ObjectDisposedException(nameof(FakeEmbeddingBackend));
+        // Return a copy so callers can't mutate shared state.
+        return (float[])_vector.Clone();
+    }
+
+    public void Dispose() { _disposed = true; }
+}
+
+// ---------------------------------------------------------------------------
+// IDeviceContext
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Configurable fake device context for testing context enrichment in AIService.
+/// </summary>
+internal sealed class FakeDeviceContext : IDeviceContext
+{
+    public string? ActiveAppId   { get; set; }
+    public string? Locale        { get; set; }
+    public string? TimeZoneId    { get; set; }
+    public DateTimeOffset? LocalTime { get; set; }
+    public double? Latitude      { get; set; }
+    public double? Longitude     { get; set; }
+    public string? LocationHint  { get; set; }
+    public float? BatteryLevel   { get; set; }
+    public bool? IsCharging      { get; set; }
+    public string? NetworkType   { get; set; }
+    public DateTimeOffset? LastActiveUtc { get; set; }
+}
+
+// ---------------------------------------------------------------------------
+// IChatGenerator — captures enriched system prompt for assertion
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Generator that records the system message from every GenerateAsync call
+/// so tests can assert on context enrichment without inspecting a black box.
+/// </summary>
+internal sealed class CapturingChatGenerator : IChatGenerator
+{
+    private readonly string _reply;
+    public List<string?> CapturedSystemMessages { get; } = new();
+
+    public CapturingChatGenerator(string reply = "captured") => _reply = reply;
+
+    public Task<string> GenerateAsync(
+        IReadOnlyList<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var sys = messages.FirstOrDefault(m =>
+            string.Equals(m.Role, "system", StringComparison.OrdinalIgnoreCase))?.Content;
+        CapturedSystemMessages.Add(sys);
+        return Task.FromResult(_reply);
+    }
+
+    public async IAsyncEnumerable<string> StreamAsync(
+        IReadOnlyList<ChatMessage> messages,
+        GenerationOptions? options = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        // Capture the system message from the stream path too.
+        var sys = messages.FirstOrDefault(m =>
+            string.Equals(m.Role, "system", StringComparison.OrdinalIgnoreCase))?.Content;
+        CapturedSystemMessages.Add(sys);
+        await Task.Yield();
+        yield return _reply;
+    }
+
+    public void Dispose() { }
+}
+
+// ---------------------------------------------------------------------------
+// IChatGenerator — returns a tool-call response on first call, plain text after
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Generator that returns a <c>&lt;tool_call&gt;</c> block on the first
+/// GenerateAsync call and a plain-text answer on subsequent calls. Used to
+/// test the agentic loop in AIService.
+/// </summary>
+internal sealed class AgenticFakeChatGenerator : IChatGenerator
+{
+    private readonly string _toolName;
+    private readonly string _finalAnswer;
+    private int _callCount;
+
+    public AgenticFakeChatGenerator(
+        string toolName = "tgn.test.ping",
+        string finalAnswer = "Done!")
+    {
+        _toolName = toolName;
+        _finalAnswer = finalAnswer;
+    }
+
+    public Task<string> GenerateAsync(
+        IReadOnlyList<ChatMessage> messages,
+        GenerationOptions? options = null,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        _callCount++;
+        if (_callCount == 1)
+            return Task.FromResult(
+                $"<tool_call>{{\"name\":\"{_toolName}\",\"arguments\":{{}}}}</tool_call>");
+        return Task.FromResult(_finalAnswer);
+    }
+
+    public async IAsyncEnumerable<string> StreamAsync(
+        IReadOnlyList<ChatMessage> messages,
+        GenerationOptions? options = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        await Task.Yield();
+        yield return _finalAnswer;
+    }
 
     public void Dispose() { }
 }

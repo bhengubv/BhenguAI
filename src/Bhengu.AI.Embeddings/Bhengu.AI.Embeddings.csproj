@@ -2,9 +2,12 @@
 	<PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+		<ProjectReference Include="..\Bhengu.AI.Inference\Bhengu.AI.Inference.csproj" />
 	</ItemGroup>
 
 	<!-- Embedding backend pending: previous MiniLM/ONNX implementation removed (US-origin model).

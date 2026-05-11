@@ -20,4 +20,9 @@
 		<PublishReadyToRun>false</PublishReadyToRun>
 		<StripSymbols>true</StripSymbols>
 	</PropertyGroup>
+
+	<!-- Native library bundling — copies llama.cpp binaries for the current
+	     platform. Override $(BhenguNativeLibRoot) to point at your own dir. -->
+	<Import Project="$(MSBuildThisFileDirectory)Bhengu.AI.Inference.targets" />
+
 </Project>

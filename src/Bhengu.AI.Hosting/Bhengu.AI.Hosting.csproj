@@ -10,6 +10,8 @@
 		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
 		<ProjectReference Include="..\Bhengu.AI.Inference\Bhengu.AI.Inference.csproj" />
 		<ProjectReference Include="..\Bhengu.AI.Tools\Bhengu.AI.Tools.csproj" />
+		<ProjectReference Include="..\Bhengu.AI.Memory\Bhengu.AI.Memory.csproj" />
+		<ProjectReference Include="..\Bhengu.AI.Skills\Bhengu.AI.Skills.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -17,6 +19,8 @@
 		     Microsoft.Extensions.Logging.Abstractions is MIT-licensed and pure
 		     managed code; safe under the sanctions / sovereign-stack policy. -->
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+		<!-- Hosting abstractions required by BackgroundInferenceWorker (IHostedService). -->
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
 	</ItemGroup>
 
 	<PropertyGroup>

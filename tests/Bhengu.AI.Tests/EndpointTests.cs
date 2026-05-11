@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -20,12 +20,12 @@ namespace Bhengu.AI.Tests;
 
 public sealed class InProcessEndpointTests
 {
-    private static ButlerService BuildReadyService()
+    private static AIService BuildReadyService()
     {
         var modelPath = Path.GetTempFileName();
         var generator = new FakeChatGenerator();
-        var opts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
-        return new ButlerService(opts, generatorFactory: _ => generator);
+        var opts = new AIOptions { ModelPath = modelPath, WarmOnStart = false };
+        return new AIService(opts, generatorFactory: _ => generator);
     }
 
     [Fact]
@@ -106,17 +106,17 @@ public sealed class HttpLoopbackEndpointTests : IAsyncLifetime
 {
     private readonly string _modelPath = Path.GetTempFileName();
     private readonly FakeChatGenerator _generator = new("loopback reply", new[] { "loop", "back" });
-    private ButlerService? _service;
+    private AIService? _service;
     private HttpLoopbackEndpoint? _endpoint;
     private HttpClient? _http;
 
     public async Task InitializeAsync()
     {
-        var opts = new ButlerOptions { ModelPath = _modelPath, WarmOnStart = false };
-        _service = new ButlerService(opts, generatorFactory: _ => _generator);
+        var opts = new AIOptions { ModelPath = _modelPath, WarmOnStart = false };
+        _service = new AIService(opts, generatorFactory: _ => _generator);
         await _service.StartAsync();
 
-        var endpointOpts = new ButlerOptions { ModelPath = _modelPath };
+        var endpointOpts = new AIOptions { ModelPath = _modelPath };
         _endpoint = new HttpLoopbackEndpoint(endpointOpts);
         await _endpoint.StartAsync(_service);
 
@@ -349,14 +349,14 @@ public sealed class HttpLoopbackEndpointConfigTests
     [Fact]
     public async Task StartAsync_NullService_Throws()
     {
-        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        await using var endpoint = new HttpLoopbackEndpoint(new AIOptions());
         await Assert.ThrowsAsync<ArgumentNullException>(() => endpoint.StartAsync(null!));
     }
 
     [Fact]
     public async Task StopAsync_WhenNotStarted_IsNoOp()
     {
-        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        await using var endpoint = new HttpLoopbackEndpoint(new AIOptions());
         var ex = await Record.ExceptionAsync(() => endpoint.StopAsync());
         Assert.Null(ex);
     }
@@ -364,14 +364,14 @@ public sealed class HttpLoopbackEndpointConfigTests
     [Fact]
     public async Task BoundPort_BeforeStart_IsZero()
     {
-        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        await using var endpoint = new HttpLoopbackEndpoint(new AIOptions());
         Assert.Equal(0, endpoint.BoundPort);
     }
 
     [Fact]
     public async Task Token_BeforeStart_IsNull()
     {
-        await using var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        await using var endpoint = new HttpLoopbackEndpoint(new AIOptions());
         Assert.Null(endpoint.Token);
     }
 
@@ -381,13 +381,13 @@ public sealed class HttpLoopbackEndpointConfigTests
         var modelPath = Path.GetTempFileName();
         try
         {
-            var endpointOpts = new ButlerOptions
+            var endpointOpts = new AIOptions
             {
                 ModelPath     = modelPath,
                 LoopbackToken = "my-fixed-token",
             };
-            var svcOpts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
-            await using var svc = new ButlerService(svcOpts,
+            var svcOpts = new AIOptions { ModelPath = modelPath, WarmOnStart = false };
+            await using var svc = new AIService(svcOpts,
                 generatorFactory: _ => new FakeChatGenerator());
             await svc.StartAsync();
 
@@ -408,9 +408,9 @@ public sealed class HttpLoopbackEndpointConfigTests
         var modelPath = Path.GetTempFileName();
         try
         {
-            var endpointOpts = new ButlerOptions { ModelPath = modelPath };
-            var svcOpts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
-            await using var svc = new ButlerService(svcOpts,
+            var endpointOpts = new AIOptions { ModelPath = modelPath };
+            var svcOpts = new AIOptions { ModelPath = modelPath, WarmOnStart = false };
+            await using var svc = new AIService(svcOpts,
                 generatorFactory: _ => new FakeChatGenerator());
             await svc.StartAsync();
 
@@ -432,9 +432,9 @@ public sealed class HttpLoopbackEndpointConfigTests
         var modelPath = Path.GetTempFileName();
         try
         {
-            var opts = new ButlerOptions { ModelPath = modelPath, LoopbackToken = "tok" };
-            var svcOpts = new ButlerOptions { ModelPath = modelPath, WarmOnStart = false };
-            await using var svc = new ButlerService(svcOpts,
+            var opts = new AIOptions { ModelPath = modelPath, LoopbackToken = "tok" };
+            var svcOpts = new AIOptions { ModelPath = modelPath, WarmOnStart = false };
+            await using var svc = new AIService(svcOpts,
                 generatorFactory: _ => new FakeChatGenerator());
             await svc.StartAsync();
 
@@ -455,16 +455,16 @@ public sealed class HttpLoopbackEndpointConfigTests
     [Fact]
     public async Task StartAsync_AfterDispose_Throws()
     {
-        var endpoint = new HttpLoopbackEndpoint(new ButlerOptions());
+        var endpoint = new HttpLoopbackEndpoint(new AIOptions());
         await endpoint.DisposeAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() =>
-            endpoint.StartAsync(new FakeButlerService()));
+            endpoint.StartAsync(new FakeAIService()));
     }
 }
 
-// Minimal IButlerService stub used only for the "start after dispose" test.
-file sealed class FakeButlerService : IButlerService
+// Minimal IAIService stub used only for the "start after dispose" test.
+file sealed class FakeAIService : IAIService
 {
     public bool IsReady => false;
     public Task StartAsync(CancellationToken ct = default) => Task.CompletedTask;
@@ -483,5 +483,9 @@ file sealed class FakeButlerService : IButlerService
     }
     public Task<ToolResult> InvokeToolAsync(ToolInvocation invocation, CancellationToken ct = default)
         => Task.FromResult(new ToolResult { ToolName = "none", Success = false });
+    public Task<string> AgenticChatAsync(string prompt, GenerationOptions? options = null, CancellationToken ct = default)
+        => Task.FromResult(string.Empty);
+    public Task SubmitFeedbackAsync(Bhengu.AI.Memory.FeedbackSignal signal, CancellationToken ct = default)
+        => Task.CompletedTask;
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

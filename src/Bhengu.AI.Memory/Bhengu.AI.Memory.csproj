@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<LangVersion>latest</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- Core interfaces (IDeviceContext, IModelManager, etc.) -->
+		<ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+		<!-- ITextEmbedder lives in the Embeddings namespace (Core project) -->
+		<ProjectReference Include="..\Bhengu.AI.Embeddings\Bhengu.AI.Embeddings.csproj" />
+		<!-- VectorMath for cosine-similarity retrieval -->
+		<ProjectReference Include="..\Bhengu.AI.Search\Bhengu.AI.Search.csproj" />
+	</ItemGroup>
+</Project>

@@ -1,17 +1,19 @@
+﻿using Bhengu.AI.Core;
 using Bhengu.AI.Hosting;
 using Bhengu.AI.Inference;
+using Bhengu.AI.Memory;
 using Xunit;
 
 namespace Bhengu.AI.Tests;
 
-public sealed class ButlerOptionsTests
+public sealed class AIOptionsTests
 {
     [Fact]
     public void Defaults_AreCorrect()
     {
-        var opts = new ButlerOptions();
+        var opts = new AIOptions();
 
-        Assert.Equal("Qwen3-14B-Q4", opts.ModelId);
+        Assert.Equal("Qwen3.6-35B-A3B-Q3", opts.ModelId);
         Assert.Null(opts.ModelPath);
         Assert.Contains("B!", opts.SystemPrompt);
         Assert.Equal(4096, opts.ContextSize);
@@ -27,22 +29,22 @@ public sealed class ButlerOptionsTests
     public void GenerateRandomToken_Is44CharBase64()
     {
         // 32 bytes → 44 chars in base64
-        var token = ButlerOptions.GenerateRandomToken();
+        var token = AIOptions.GenerateRandomToken();
         Assert.Equal(44, token.Length);
     }
 
     [Fact]
     public void GenerateRandomToken_IsUnique()
     {
-        var t1 = ButlerOptions.GenerateRandomToken();
-        var t2 = ButlerOptions.GenerateRandomToken();
+        var t1 = AIOptions.GenerateRandomToken();
+        var t2 = AIOptions.GenerateRandomToken();
         Assert.NotEqual(t1, t2);
     }
 
     [Fact]
     public void GenerateRandomToken_IsValidBase64()
     {
-        var token = ButlerOptions.GenerateRandomToken();
+        var token = AIOptions.GenerateRandomToken();
         var bytes = Convert.FromBase64String(token);
         Assert.Equal(32, bytes.Length);
     }
@@ -54,7 +56,7 @@ public sealed class ButlerOptionsTests
     [Fact]
     public void DefaultGenerationOptions_DefaultIsNull()
     {
-        var opts = new ButlerOptions();
+        var opts = new AIOptions();
         Assert.Null(opts.DefaultGenerationOptions);
     }
 
@@ -62,7 +64,7 @@ public sealed class ButlerOptionsTests
     public void DefaultGenerationOptions_CanBeSet()
     {
         var genOpts = new GenerationOptions { MaxTokens = 256, Temperature = 0.5f };
-        var opts = new ButlerOptions { DefaultGenerationOptions = genOpts };
+        var opts = new AIOptions { DefaultGenerationOptions = genOpts };
         Assert.Same(genOpts, opts.DefaultGenerationOptions);
     }
 
@@ -77,7 +79,7 @@ public sealed class ButlerOptionsTests
         var observer   = new FakeButlerObserver();
         var genOpts    = new GenerationOptions { MaxTokens = 1024 };
 
-        var opts = new ButlerOptions
+        var opts = new AIOptions
         {
             ModelId                  = "Qwen3.6-35B-A3B-Q3",
             ModelPath                = "/data/models/qwen.gguf",
@@ -103,5 +105,68 @@ public sealed class ButlerOptionsTests
         Assert.Same(toolBridge,                opts.ToolBridge);
         Assert.Same(observer,                  opts.Observer);
         Assert.Same(genOpts,                   opts.DefaultGenerationOptions);
+    }
+
+    // ------------------------------------------------------------------
+    // v2.0 properties — defaults
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void V2_Defaults_AreCorrect()
+    {
+        var opts = new AIOptions();
+
+        // Sensorium
+        Assert.Null(opts.DeviceContext);
+
+        // Memory / RAG
+        Assert.Null(opts.EpisodicMemory);
+        Assert.Null(opts.RagBuilder);
+        Assert.Equal(5, opts.RagTopK);
+
+        // Persona
+        Assert.Null(opts.PersonaStore);
+        Assert.Equal("default", opts.PersonaUserId);
+
+        // Feedback
+        Assert.Null(opts.FeedbackStore);
+
+        // Agentic loop
+        Assert.Equal(5, opts.AgenticMaxIterations);
+    }
+
+    // ------------------------------------------------------------------
+    // v2.0 properties — init-only overrides
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void V2_InitProperties_AllCanBeOverridden()
+    {
+        var episodicMemory  = new InMemoryEpisodicStore();
+        var ragBuilder      = new RagContextBuilder(episodicMemory);
+        var personaStore    = new InMemoryPersonaStore();
+        var feedbackStore   = new InMemoryFeedbackStore();
+        var deviceCtx       = new FakeDeviceContext { ActiveAppId = "tgn.butler" };
+
+        var opts = new AIOptions
+        {
+            DeviceContext        = deviceCtx,
+            EpisodicMemory       = episodicMemory,
+            RagBuilder           = ragBuilder,
+            RagTopK              = 10,
+            PersonaStore         = personaStore,
+            PersonaUserId        = "user-123",
+            FeedbackStore        = feedbackStore,
+            AgenticMaxIterations = 3,
+        };
+
+        Assert.Same(deviceCtx,      opts.DeviceContext);
+        Assert.Same(episodicMemory, opts.EpisodicMemory);
+        Assert.Same(ragBuilder,     opts.RagBuilder);
+        Assert.Equal(10,            opts.RagTopK);
+        Assert.Same(personaStore,   opts.PersonaStore);
+        Assert.Equal("user-123",    opts.PersonaUserId);
+        Assert.Same(feedbackStore,  opts.FeedbackStore);
+        Assert.Equal(3,             opts.AgenticMaxIterations);
     }
 }
