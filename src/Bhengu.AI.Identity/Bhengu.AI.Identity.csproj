@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Identity</PackageId>
+    <Description>Cross-device identity for Circle AI. Unified persona key that travels with the person — not the device. Foundation for Bhengu.AI.Sync.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+  </ItemGroup>
+</Project>

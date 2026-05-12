@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>Bhengu.AI.Commerce.Integration.Xero</PackageId>
+    <Description>Circle AI Xero accounting integration domain assistant. Xero-aware bookkeeping, invoice management, reconciliation, and reporting guidance.</Description>
+  </PropertyGroup>
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" />
+    <ProjectReference Include="..\Bhengu.AI.Commerce.Accounting\Bhengu.AI.Commerce.Accounting.csproj" />
+  </ItemGroup>
+</Project>

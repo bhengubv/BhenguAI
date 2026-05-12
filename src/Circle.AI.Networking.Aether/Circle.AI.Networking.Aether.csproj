@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Circle.AI.Networking.Aether</PackageId>
+    <Description>Aether mesh implementation of Circle.AI.Networking. Signal E2E, AODV routing, DTN store-and-forward, SOS flood. Wraps aether-protocol engine.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Circle.AI.Networking\Circle.AI.Networking.csproj" />
+    <ProjectReference Include="..\Circle.AI.Aether\Circle.AI.Aether.csproj" />
+  </ItemGroup>
+</Project>

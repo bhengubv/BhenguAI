@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Ambient</PackageId>
+    <Description>Circle AI surface adapter for always-on ambient devices (smart speakers,
+room displays, car infotainment). Low-power background monitor with
+proactive trigger evaluation and voice-first output.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" />
+  </ItemGroup>
+</Project>

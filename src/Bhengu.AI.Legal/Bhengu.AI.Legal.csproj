@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>Bhengu.AI.Legal</PackageId><Description>Circle AI legal domain assistant. Contract review, compliance guidance, legal research, and document drafting support.</Description></PropertyGroup>
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" /></ItemGroup>
+</Project>

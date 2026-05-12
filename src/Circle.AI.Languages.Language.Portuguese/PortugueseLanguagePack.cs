@@ -1,0 +1,68 @@
+using Circle.AI.Languages.Language;
+
+namespace Circle.AI.Languages.Language.Portuguese;
+
+/// <summary>
+/// Portuguese language pack for Circle AI.
+/// Provides idiomatic expressions, cultural context, and prompt tuning
+/// to make the AI reason naturally in Portuguese (Português).
+/// </summary>
+public sealed class PortugueseLanguagePack : ILanguagePack
+{
+    public static readonly PortugueseLanguagePack Instance = new();
+
+    public LanguagePackMetadata Metadata { get; } = new(
+        BcpTag:          "pt",
+        DisplayName:     "Portuguese",
+        NativeName:      "Português",
+        PrimaryRegion:   "PT",
+        SpokenInRegions: ["PT","BR","MZ","AO"],
+        PackVersion:     new Version(1, 0));
+
+    private static readonly Dictionary<string, string> Idioms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Add Portuguese-specific idiomatic mappings here.
+        // Example entries are placeholders — extend with real linguistic data.
+        ["hello"]   = "Bom dia",
+        ["goodbye"] = "Boa noite",
+    };
+
+    private static readonly Dictionary<string, CulturalNote[]> Notes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["greeting"] =
+        [
+            new CulturalNote(
+                "greeting",
+                "Use 'Bom dia' in the morning. Show respect to elders.",
+                ["Bom dia", "Boa noite"])
+        ]
+    };
+
+    public string? GetIdiomaticExpression(string phrase)
+        => Idioms.TryGetValue(phrase, out var v) ? v : null;
+
+    public string AdaptSystemPrompt(string basePrompt)
+        => $"You are a culturally aware AI assistant for Portuguese speakers. " +
+           $"Respond in Portuguese (Português) unless instructed otherwise. " +
+           $"Use natural, idiomatic expressions. Respect regional customs. " +
+           $"\n\n{basePrompt}";
+
+    public IReadOnlyList<CulturalNote> GetCulturalNotes(string context)
+        => Notes.TryGetValue(context, out var n) ? n : [];
+
+    public string GetGreeting(string timeOfDay)
+        => timeOfDay.ToLowerInvariant() switch
+        {
+            "morning" or "am" => "Bom dia",
+            _                 => "Boa noite"
+        };
+
+    public IReadOnlyDictionary<string, string> GetLocaleHints()
+        => new Dictionary<string, string>
+        {
+            ["bcp_tag"]     = "pt",
+            ["region"]      = "PT",
+            ["rtl"]         = "false",
+            ["date_format"] = "dd/MM/yyyy"
+        };
+}

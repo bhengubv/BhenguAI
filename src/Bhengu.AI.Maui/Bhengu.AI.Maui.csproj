@@ -51,9 +51,8 @@
     <ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
     <!-- IButlerService, IPushNotificationSender, IThermalThrottleService -->
     <ProjectReference Include="..\Bhengu.AI.Hosting\Bhengu.AI.Hosting.csproj" />
-    <!-- IAudioCapture, AudioFormat used by MauiAudioCapture -->
-    <ProjectReference Include="..\Bhengu.AI.Voice\Bhengu.AI.Voice.csproj"
-                      Condition="$(TargetFramework) == 'net9.0'" />
+    <!-- IAudioCapture, AudioFormat used by MauiAudioCapture (all TFMs) -->
+    <ProjectReference Include="..\Bhengu.AI.Voice\Bhengu.AI.Voice.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Networking.Mqtt</PackageId>
+    <Description>MQTT transport for Circle AI Networking. Pub/sub, QoS 0/1/2, retain — ideal for IoT sensors.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Networking\Bhengu.AI.Networking.csproj" />
+    <PackageReference Include="MQTTnet" Version="4.3.6.1152" />
+  </ItemGroup>
+</Project>

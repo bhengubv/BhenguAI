@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Networking.WiFi</PackageId>
+    <Description>WiFi Direct / mDNS / LAN transport for Circle AI. No Aether required. Peer discovery via UDP broadcast and mDNS.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Networking\Bhengu.AI.Networking.csproj" />
+  </ItemGroup>
+</Project>

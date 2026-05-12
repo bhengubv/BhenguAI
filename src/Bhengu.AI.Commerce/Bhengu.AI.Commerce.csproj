@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>Bhengu.AI.Commerce</PackageId>
+    <Description>Circle AI e-commerce domain assistant. Listings, pricing, orders, suppliers, and marketplace analytics.</Description>
+  </PropertyGroup>
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" /></ItemGroup>
+</Project>

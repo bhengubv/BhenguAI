@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Networking.NearLink</PackageId>
+    <Description>Huawei SLE / NearLink transport for Circle AI. 600m range, 12 Mbps. HarmonyOS and Android. No Aether required.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Networking\Bhengu.AI.Networking.csproj" />
+  </ItemGroup>
+</Project>

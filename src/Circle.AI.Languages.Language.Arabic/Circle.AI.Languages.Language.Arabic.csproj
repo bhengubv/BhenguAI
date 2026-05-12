@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Circle.AI.Languages.Language.Arabic</PackageId>
+    <Description>Arabic language pack for Circle AI. Idiomatic expressions, cultural context, and locale-specific prompt tuning for SA,EG,MA,AE.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Circle.AI.Languages.Language\Circle.AI.Languages.Language.csproj" />
+  </ItemGroup>
+</Project>

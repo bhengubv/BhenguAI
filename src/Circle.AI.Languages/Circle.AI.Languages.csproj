@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Languages</PackageId>
+    <Description>
+      Language foundation for Circle AI. Language detection, BCP-47 normalisation,
+      writing-system handling, and the registry of all supported languages.
+      Foundation for Circle.AI.Languages.Translation and per-language packs.
+    </Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- No external dependencies — pure language primitives. -->
+
+</Project>

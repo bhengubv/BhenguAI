@@ -14,7 +14,10 @@
 //   builder.Services.AddSingleton<IAudioCapture, MauiAudioCapture>();
 
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Circle.AI.Voice;
+// Alias avoids collision with Android.Media.AudioFormat on the Android TFM.
+using VoiceAudioFormat = Circle.AI.Voice.AudioFormat;
 
 #if ANDROID
 using Android.Media;
@@ -42,11 +45,11 @@ namespace Circle.AI.Maui;
 public sealed class MauiAudioCapture : IAudioCapture, IAsyncDisposable
 {
     // 16 kHz × 1 channel × 2 bytes × 0.1 s = 3200 bytes per frame.
-    private const int SampleRate   = 16_000;
-    private const int Channels     = 1;
+    private const int SampleRate    = 16_000;
+    private const int Channels      = 1;
     private const int BitsPerSample = 16;
-    private const int FrameMs      = 100;
-    private const int FrameBytes   = SampleRate * Channels * (BitsPerSample / 8) * FrameMs / 1000;
+    private const int FrameMs       = 100;
+    private const int FrameBytes    = SampleRate * Channels * (BitsPerSample / 8) * FrameMs / 1000;
 
     private bool _started;
     private bool _disposed;
@@ -65,7 +68,7 @@ public sealed class MauiAudioCapture : IAudioCapture, IAsyncDisposable
 #endif
 
     /// <inheritdoc />
-    public AudioFormat Format { get; } = AudioFormat.Pcm16Mono16k;
+    public VoiceAudioFormat Format { get; } = VoiceAudioFormat.Pcm16Mono16k;
 
     /// <summary>
     /// Initialise the platform audio recording backend.
@@ -107,23 +110,23 @@ public sealed class MauiAudioCapture : IAudioCapture, IAsyncDisposable
         var fmt = new AVAudioFormat(SampleRate, 1);
         _inputNode.InstallTapOnBus(0, (uint)(FrameBytes * 4), fmt, (buf, _) =>
         {
-            if (buf.FloatChannelData is null) return;
+            // In .NET 10 MAUI bindings FloatChannelData is nint (IntPtr-like).
+            nint channelData = buf.FloatChannelData;
+            if (channelData == 0) return;
+
             var count = (int)buf.FrameLength;
             var pcm   = new byte[count * 2];
-            unsafe
+
+            // Read the pointer to channel 0's float array.
+            IntPtr channel0 = Marshal.ReadIntPtr((IntPtr)channelData, 0);
+
+            for (int i = 0; i < count; i++)
             {
-                float* src = (float*)buf.FloatChannelData[0];
-                fixed (byte* dst = pcm)
-                {
-                    short* s = (short*)dst;
-                    for (int i = 0; i < count; i++)
-                    {
-                        float f = src[i];
-                        if (f >  1f) f =  1f;
-                        if (f < -1f) f = -1f;
-                        s[i] = (short)(f * 32767f);
-                    }
-                }
+                float f = Marshal.PtrToStructure<float>(channel0 + i * sizeof(float));
+                f = Math.Clamp(f, -1f, 1f);
+                short s = (short)(f * 32767f);
+                pcm[i * 2]     = (byte)(s & 0xFF);
+                pcm[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
             }
             _iosQueue.TryAdd(pcm);
         });
@@ -201,7 +204,7 @@ public sealed class MauiAudioCapture : IAudioCapture, IAsyncDisposable
             int read = _recorder.Read(buffer, 0, buffer.Length);
             if (read <= 0) break;
             var chunk = new byte[read];
-            Buffer.BlockCopy(buffer, 0, chunk, 0, read);
+            global::System.Buffer.BlockCopy(buffer, 0, chunk, 0, read);
             yield return chunk;
         }
 
@@ -242,7 +245,7 @@ public sealed class MauiAudioCapture : IAudioCapture, IAsyncDisposable
             await _stream.ReadAsync(ibuf, len, InputStreamOptions.None).AsTask(ct).ConfigureAwait(false);
             DataReader.FromBuffer(ibuf).ReadBytes(buffer);
             var chunk = new byte[len];
-            Buffer.BlockCopy(buffer, 0, chunk, 0, (int)len);
+            global::System.Buffer.BlockCopy(buffer, 0, chunk, 0, (int)len);
             yield return chunk;
         }
 

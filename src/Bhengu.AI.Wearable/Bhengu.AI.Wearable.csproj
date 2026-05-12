@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Wearable</PackageId>
+    <Description>Circle AI surface adapter for smartwatches and wearable devices.
+Injects biometric context (heart rate, steps, SpO₂) into the Companion session
+and enforces wearable-appropriate reply constraints.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" />
+  </ItemGroup>
+</Project>

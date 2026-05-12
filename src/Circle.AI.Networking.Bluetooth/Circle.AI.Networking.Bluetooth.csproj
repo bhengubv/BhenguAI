@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Circle.AI.Networking.Bluetooth</PackageId>
+    <Description>Raw BLE GATT transport for Circle AI. No Aether required. Device discovery and characteristic read/write.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Circle.AI.Networking\Circle.AI.Networking.csproj" />
+  </ItemGroup>
+</Project>

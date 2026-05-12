@@ -51,9 +51,8 @@
     <ProjectReference Include="..\Circle.AI.Core\Circle.AI.Core.csproj" />
     <!-- IButlerService, IPushNotificationSender, IThermalThrottleService -->
     <ProjectReference Include="..\Circle.AI.Hosting\Circle.AI.Hosting.csproj" />
-    <!-- IAudioCapture, AudioFormat used by MauiAudioCapture -->
-    <ProjectReference Include="..\Circle.AI.Voice\Circle.AI.Voice.csproj"
-                      Condition="$(TargetFramework) == 'net9.0'" />
+    <!-- IAudioCapture, AudioFormat used by MauiAudioCapture (all TFMs) -->
+    <ProjectReference Include="..\Circle.AI.Voice\Circle.AI.Voice.csproj" />
   </ItemGroup>
 
 </Project>

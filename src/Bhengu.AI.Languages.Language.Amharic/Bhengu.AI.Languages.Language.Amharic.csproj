@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Languages.Language.Amharic</PackageId>
+    <Description>Amharic language pack for Circle AI. Idiomatic expressions, cultural context, and locale-specific prompt tuning for ET.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Languages.Language\Bhengu.AI.Languages.Language.csproj" />
+  </ItemGroup>
+</Project>

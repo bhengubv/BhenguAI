@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>Bhengu.AI.HR</PackageId><Description>Circle AI human resources domain assistant. Talent acquisition, performance management, labour law, and people analytics.</Description></PropertyGroup>
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" /></ItemGroup>
+</Project>

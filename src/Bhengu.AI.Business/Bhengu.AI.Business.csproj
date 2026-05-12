@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>Bhengu.AI.Business</PackageId>
+    <Description>Circle AI business strategy and operations domain assistant. Strategy, OKRs, meetings, reporting, and executive decision support.</Description>
+  </PropertyGroup>
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Bhengu.AI.Companion\Bhengu.AI.Companion.csproj" /></ItemGroup>
+</Project>

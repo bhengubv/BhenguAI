@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Circle.AI.Languages.Language</PackageId>
+    <Description>Language pack base for Circle AI. Idiomatic context, cultural nuance, locale-specific prompt tuning. Each language sub-package provides a concrete ILanguagePack.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Circle.AI.Languages\Circle.AI.Languages.csproj" />
+  </ItemGroup>
+</Project>

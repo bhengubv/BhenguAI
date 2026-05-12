@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Networking.Aether</PackageId>
+    <Description>Aether mesh implementation of Bhengu.AI.Networking. Signal E2E, AODV routing, DTN store-and-forward, SOS flood. Wraps aether-protocol engine.</Description>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Networking\Bhengu.AI.Networking.csproj" />
+    <ProjectReference Include="..\Bhengu.AI.Aether\Bhengu.AI.Aether.csproj" />
+  </ItemGroup>
+</Project>
