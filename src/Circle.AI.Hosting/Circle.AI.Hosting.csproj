@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Hosting</PackageId>
+    <Description>DI wiring, scheduled tasks, and proactive reasoning host for Circle AI agents.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>

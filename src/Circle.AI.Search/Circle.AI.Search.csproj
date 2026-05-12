@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Search</PackageId>
+    <Description>Vector search over local SQLite data for Circle AI retrieval-augmented generation.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>

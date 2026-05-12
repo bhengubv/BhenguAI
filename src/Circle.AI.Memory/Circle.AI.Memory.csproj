@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Memory</PackageId>
+    <Description>On-device episodic memory, affect state, and context window management for Circle AI agents.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<LangVersion>latest</LangVersion>

@@ -1,4 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Security</PackageId>
+    <Description>AI Security Layer for Circle. Trust scoring, threat detection, and security directives over the Aether mesh network.</Description>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>

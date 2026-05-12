@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Inference</PackageId>
+    <Description>On-device LLM inference for Circle. llama.cpp P/Invoke layer with Qwen 3 chat generator. Native binaries supplied separately (see SETUP.md).</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>

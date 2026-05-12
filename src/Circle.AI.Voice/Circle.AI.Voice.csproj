@@ -1,4 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Voice</PackageId>
+    <Description>TTS/STT abstraction layer for Circle AI voice interaction.</Description>
+  </PropertyGroup>
+
 	<PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>

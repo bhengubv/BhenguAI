@@ -1,5 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Embeddings</PackageId>
+    <Description>On-device text embeddings for Circle AI. Sovereign-origin embedder (BGE / Qwen-Embedding) for fully offline semantic search.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>

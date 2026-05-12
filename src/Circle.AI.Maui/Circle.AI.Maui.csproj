@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Maui</PackageId>
+    <Description>.NET MAUI platform adapter for Circle AI. On-device inference on Android, iOS, macOS Catalyst, and Windows.</Description>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- Multi-platform MAUI class library — ships alongside every MAUI host app.   -->
     <!-- net9.0 is included as a headless TFM so the test project (net9.0) can     -->

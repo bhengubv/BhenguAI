@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
+jobs:
+  build-and-test:
+    name: Build & Test (net9.0)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.x'
+
+      - name: Restore
+        run: dotnet restore tests/Circle.AI.Tests/Circle.AI.Tests.csproj
+
+      - name: Build
+        run: |
+          dotnet build tests/Circle.AI.Tests/Circle.AI.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Test
+        run: |
+          dotnet test tests/Circle.AI.Tests/Circle.AI.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
+            --logger "trx;LogFileName=test-results.trx" \
+            --collect:"XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/*.trx'
+          if-no-files-found: ignore

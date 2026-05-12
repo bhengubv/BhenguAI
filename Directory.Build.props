@@ -1,31 +1,40 @@
 <Project>
   <PropertyGroup>
-    <!-- ========== CORE METADATA ========== -->
-    <Version>1.1.0</Version>
-    <Authors>Thamsanqa Bengu; Bhengu B.V.</Authors>
-    <Company>Bhengu B.V.</Company>
-    <Description>On-device AI library for the TheGeekNetwork ecosystem (BhenguAI / Butler / B!).</Description>
+    <!-- ========== IDENTITY ========== -->
+    <Authors>The Geek Network</Authors>
+    <Company>The Other Bhengu (PTY) Ltd</Company>
+    <Copyright>Copyright © 2024-2025 The Other Bhengu (PTY) Ltd</Copyright>
 
-    <!-- ========== TARGET FRAMEWORK & LANGUAGE ========== -->
-    <TargetFramework>net9.0</TargetFramework>
+    <!-- ========== VERSIONING ========== -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+
+    <!-- ========== LANGUAGE ========== -->
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
 
-    <!-- ========== ESSENTIAL CONFIGURATION ========== -->
+    <!-- ========== NUGET ========== -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <RepositoryUrl>https://github.com/bhengubv/Bhengu.AI</RepositoryUrl>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageProjectUrl>https://github.com/bhengubv/CircleAI</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/bhengubv/CircleAI</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>circle-ai;on-device-ai;llm;local-ai;circle;thegeeknetwork</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
-    <!-- ========== BUILD OPTIMIZATIONS ========== -->
+    <!-- ========== BUILD QUALITY ========== -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
 
-    <!-- ========== PATH RESOLUTION FIXES ========== -->
+    <!-- ========== PATH RESOLUTION ========== -->
     <PackageIconFullPath>$(MSBuildThisFileDirectory)assets\icon.png</PackageIconFullPath>
     <PackageReadmeFullPath>$(MSBuildThisFileDirectory)README.md</PackageReadmeFullPath>
   </PropertyGroup>

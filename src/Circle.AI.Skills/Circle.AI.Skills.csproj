@@ -1,4 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Circle.AI.Skills</PackageId>
+    <Description>Skill dispatch and execution pipeline for Circle AI on-device agents.</Description>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
