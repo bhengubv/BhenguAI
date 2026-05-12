@@ -1,4 +1,11 @@
-# BhenguAI
+# BhenguAI — ⚠️ Deprecated as of 2.0.0
+
+> **This library has been rebranded.**
+> BhenguAI 2.0.0 is the final release under this name.
+> All active development continues at **[CircleAI](https://github.com/bhengubv/CircleAI)** under the `Circle.AI.*` namespace.
+> Migrate by replacing `Bhengu.AI.*` imports with `Circle.AI.*`.
+
+---
 
 On-device AI library for the TheGeekNetwork ecosystem. Internal codename: Butler / B!.
 
@@ -10,12 +17,19 @@ Runs Qwen 3 14B (Alibaba, MIT licensed) locally via llama.cpp. Designed to fit o
 - Resilience: works under sanctions, blackouts, or roaming.
 - Cost: zero per-token charges.
 
-## Components
+## Components (final — 12 projects)
 - **Bhengu.AI.Core** — model registry, downloader (ModelScope primary, HuggingFace fallback), local cache.
 - **Bhengu.AI.Inference** — llama.cpp P/Invoke layer. Qwen chat generator.
 - **Bhengu.AI.Embeddings** — local embeddings for semantic search.
 - **Bhengu.AI.Search** — vector search over local data.
+- **Bhengu.AI.Memory** — affect state, episodic memory, context windows.
+- **Bhengu.AI.Skills** — skill dispatch and execution pipeline.
 - **Bhengu.AI.Tools** — function-calling bridge to the 36 TheGeekNetwork APIs.
+- **Bhengu.AI.Voice** — TTS/STT abstraction layer.
+- **Bhengu.AI.Hosting** — DI wiring, scheduled tasks, proactive reasoning.
+- **Bhengu.AI.Maui** — MAUI platform adapter.
+- **Bhengu.AI.Aether** — Aether mesh-network telemetry contracts.
+- **Bhengu.AI.Security** — AI Security Layer: trust scoring, threat detection, security directives.
 
 ## Quick start
 
