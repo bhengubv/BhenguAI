@@ -10,8 +10,8 @@
 // (llama.dll / libllama.so / libllama.dylib) is dropped next to the produced
 // binary. See SETUP.md for instructions.
 
-using Circle.AI.Core;
-using Circle.AI.Inference;
+using Bhengu.AI.Core;
+using Bhengu.AI.Inference;
 
 const string ModelId = "Qwen3-14B-Q4";
 

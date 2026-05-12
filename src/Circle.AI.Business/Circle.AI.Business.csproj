@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><PackageId>Circle.AI.Business</PackageId>
-    <Description>Circle AI business strategy and operations domain assistant. Strategy, OKRs, meetings, reporting, and executive decision support.</Description>
-  </PropertyGroup>
-  <PropertyGroup><TargetFramework>net9.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
-  <ItemGroup><ProjectReference Include="..\Circle.AI.Companion\Circle.AI.Companion.csproj" /></ItemGroup>
-</Project>

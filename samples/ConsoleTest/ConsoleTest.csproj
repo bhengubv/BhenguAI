@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Circle.AI.Core\Circle.AI.Core.csproj" />
-    <ProjectReference Include="..\..\src\Circle.AI.Inference\Circle.AI.Inference.csproj" />
+    <ProjectReference Include="..\..\src\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+    <ProjectReference Include="..\..\src\Bhengu.AI.Inference\Bhengu.AI.Inference.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
