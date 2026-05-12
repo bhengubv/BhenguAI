@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Security</PackageId>
+    <Description>
+      Transport-agnostic AI Security Layer for Bhengu AI.
+      Trust scoring, threat detection, and security directives work across
+      any network transport (WiFi, BLE, NearLink, HTTP, Aether mesh, etc.).
+      For Aether-specific telemetry integration, add Bhengu.AI.Security.Aether.
+    </Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- No transport dependencies — security primitives are self-contained. -->
+
+</Project>

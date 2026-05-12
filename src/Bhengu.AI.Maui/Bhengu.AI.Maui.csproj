@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Maui</PackageId>
+    <Description>.NET MAUI platform adapter for Bhengu AI. On-device inference on Android, iOS, macOS Catalyst, and Windows.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Multi-platform MAUI class library — ships alongside every MAUI host app.   -->
+    <!-- net9.0 is included as a headless TFM so the test project (net9.0) can     -->
+    <!-- reference this project. Under net9.0, MAUI sensor properties return null. -->
+    <TargetFrameworks>net9.0;net10.0-android;net10.0-ios;net10.0-maccatalyst;net10.0-windows10.0.19041.0</TargetFrameworks>
+    <UseMaui Condition="$(TargetFramework) != 'net9.0'">true</UseMaui>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Minimum OS versions (mirrors .NET MAUI defaults). -->
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
+
+    <!-- Suppress MAUI app-specific requirements (this is a library, not an app). -->
+    <OutputType>Library</OutputType>
+    <RootNamespace>Bhengu.AI.Maui</RootNamespace>
+    <!-- MA002: we use Essentials only, not Controls. Suppress the Controls hint. -->
+    <SkipValidateMauiImplicitPackageReferences Condition="$(TargetFramework) != 'net9.0'">true</SkipValidateMauiImplicitPackageReferences>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Microsoft.Maui.Essentials provides Battery, Connectivity, DeviceInfo.
+      We do NOT depend on Microsoft.Maui.Controls (no UI in this library).
+    -->
+    <PackageReference Include="Microsoft.Maui.Essentials" Version="10.0.20"
+                      Condition="$(TargetFramework) != 'net9.0'" />
+
+    <!--
+      ILogger<T> is pulled in transitively by the MAUI SDK on MAUI TFMs.
+      For the headless net9.0 TFM (used by the test project) we add it
+      explicitly so MauiInferenceService compiles without conditional guards.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"
+                      Version="9.0.0"
+                      Condition="$(TargetFramework) == 'net9.0'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IDeviceContext lives in the AI Core; no circular dependency. -->
+    <ProjectReference Include="..\Bhengu.AI.Core\Bhengu.AI.Core.csproj" />
+    <!-- IButlerService, IPushNotificationSender, IThermalThrottleService -->
+    <ProjectReference Include="..\Bhengu.AI.Hosting\Bhengu.AI.Hosting.csproj" />
+    <!-- IAudioCapture, AudioFormat used by MauiAudioCapture -->
+    <ProjectReference Include="..\Bhengu.AI.Voice\Bhengu.AI.Voice.csproj"
+                      Condition="$(TargetFramework) == 'net9.0'" />
+  </ItemGroup>
+
+</Project>

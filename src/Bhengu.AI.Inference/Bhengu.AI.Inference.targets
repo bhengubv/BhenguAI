@@ -1,0 +1,201 @@
+<!--
+  Bhengu.AI.Inference.targets
+  ═══════════════════════════════════════════════════════════════════════════
+  Bundles platform-native llama.cpp (+ llava) binaries into the consuming
+  project's output so NativeLibraryResolver can find them at runtime.
+
+  Supported Runtime Identifiers
+  ──────────────────────────────
+    Desktop / server
+      win-x64     win-arm64
+      linux-x64   linux-arm64
+      osx-x64     osx-arm64
+
+    Mobile (MAUI)
+      android-arm64   android-x64
+      ios-arm64
+      maccatalyst-arm64   maccatalyst-x64
+
+  Native file layout
+  ──────────────────
+  Ship the compiled llama.cpp / llava binaries alongside
+  Bhengu.AI.Inference.dll (or the .csproj when building from source) under:
+
+    runtimes/{RID}/native/
+      Windows  → llama.dll           llava_shared.dll
+      Linux    → libllama.so         libllava_shared.so
+      macOS    → libllama.dylib      libllava_shared.dylib
+      Android  → libllama.so         libllava_shared.so
+      iOS/Cat  → libllama.a          libllava_shared.a  (static — linked at build)
+
+  Customisation
+  ─────────────
+  Override the root search directory by setting $(BhenguNativeLibRoot) in your
+  project before importing this targets file.  Default: same directory as this
+  targets file (i.e., alongside the dll / csproj).
+
+  Usage in csproj (already wired in Bhengu.AI.Inference.csproj):
+    <Import Project="$(MSBuildThisFileDirectory)Bhengu.AI.Inference.targets" />
+-->
+<Project>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Root search directory — override via $(BhenguNativeLibRoot)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <BhenguNativeLibRoot
+        Condition="'$(BhenguNativeLibRoot)' == ''">$(MSBuildThisFileDirectory)</BhenguNativeLibRoot>
+  </PropertyGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Resolve effective RID for the current build leg
+       ═══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <!-- MAUI multi-targeting: TargetPlatformIdentifier is set per TFM.
+         RuntimeIdentifier is set per ABI leg inside the Xamarin/MAUI SDK. -->
+    <_BRI Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_BRI>
+
+    <!-- Fallback for MAUI build legs where RID is not yet propagated -->
+    <_BRI Condition="'$(_BRI)' == '' And '$(TargetPlatformIdentifier)' == 'android'">android-arm64</_BRI>
+    <_BRI Condition="'$(_BRI)' == '' And '$(TargetPlatformIdentifier)' == 'ios'">ios-arm64</_BRI>
+    <_BRI Condition="'$(_BRI)' == '' And '$(TargetPlatformIdentifier)' == 'maccatalyst'">maccatalyst-arm64</_BRI>
+
+    <!-- Final fallback: use the SDK host RID -->
+    <_BRI Condition="'$(_BRI)' == ''">$(NETCoreSdkRuntimeIdentifier)</_BRI>
+  </PropertyGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Map RID → native file names
+       ═══════════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <!-- llama core library -->
+    <_LlamaLib Condition="$(_BRI.StartsWith('win'))">llama.dll</_LlamaLib>
+    <_LlamaLib Condition="$(_BRI.StartsWith('osx')) Or $(_BRI.StartsWith('ios')) Or $(_BRI.StartsWith('maccatalyst'))">libllama.dylib</_LlamaLib>
+    <_LlamaLib Condition="'$(_LlamaLib)' == ''">libllama.so</_LlamaLib>
+
+    <!-- llava multimodal addon -->
+    <_LlavaLib Condition="$(_BRI.StartsWith('win'))">llava_shared.dll</_LlavaLib>
+    <_LlavaLib Condition="$(_BRI.StartsWith('osx')) Or $(_BRI.StartsWith('ios')) Or $(_BRI.StartsWith('maccatalyst'))">libllava_shared.dylib</_LlavaLib>
+    <_LlavaLib Condition="'$(_LlavaLib)' == ''">libllava_shared.so</_LlavaLib>
+
+    <!-- iOS / macCatalyst use static libs (.a) linked at compile time -->
+    <_LlamaStaticLib>libllama.a</_LlamaStaticLib>
+    <_LlavaStaticLib>libllava_shared.a</_LlavaStaticLib>
+
+    <!-- Intermediate path shorthand -->
+    <_NativeDir>$(BhenguNativeLibRoot)runtimes/$(_BRI)/native/</_NativeDir>
+  </PropertyGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Desktop / Server — copy to $(OutDir)runtimes/{RID}/native/
+       Applies to: win-*, linux-*, osx-*
+       ═══════════════════════════════════════════════════════════════════ -->
+  <ItemGroup Condition="'$(_BRI)' != '' And
+                         (  $(_BRI.StartsWith('win'))
+                          Or $(_BRI.StartsWith('linux'))
+                          Or $(_BRI.StartsWith('osx')))">
+    <!-- llama core -->
+    <_BhenguNativeFile
+        Include="$(_NativeDir)$(_LlamaLib)"
+        Condition="Exists('$(_NativeDir)$(_LlamaLib)')"
+        DestRid="$(_BRI)" />
+
+    <!-- llava addon (optional — omit if not shipping multimodal) -->
+    <_BhenguNativeFile
+        Include="$(_NativeDir)$(_LlavaLib)"
+        Condition="Exists('$(_NativeDir)$(_LlavaLib)')"
+        DestRid="$(_BRI)" />
+  </ItemGroup>
+
+  <Target Name="_BhenguCopyNativeLibs"
+          BeforeTargets="Build"
+          Condition="'@(_BhenguNativeFile)' != ''">
+    <MakeDir Directories="$(OutDir)runtimes/$(_BRI)/native/" />
+    <Copy SourceFiles="@(_BhenguNativeFile)"
+          DestinationFolder="$(OutDir)runtimes/$(_BRI)/native/"
+          SkipUnchangedFiles="true"
+          Retries="3"
+          RetryDelayMilliseconds="500" />
+    <Message Importance="normal"
+             Text="[BhenguAI] Native libs → $(OutDir)runtimes/$(_BRI)/native/" />
+  </Target>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Android — AndroidNativeLibrary items (bundled into APK by the SDK)
+       arm64-v8a  ← android-arm64
+       x86_64     ← android-x64
+       ═══════════════════════════════════════════════════════════════════ -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
+    <!-- arm64-v8a llama -->
+    <AndroidNativeLibrary
+        Include="$(BhenguNativeLibRoot)runtimes/android-arm64/native/libllama.so"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/android-arm64/native/libllama.so')"
+        Abi="arm64-v8a" />
+
+    <!-- arm64-v8a llava -->
+    <AndroidNativeLibrary
+        Include="$(BhenguNativeLibRoot)runtimes/android-arm64/native/libllava_shared.so"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/android-arm64/native/libllava_shared.so')"
+        Abi="arm64-v8a" />
+
+    <!-- x86_64 llama -->
+    <AndroidNativeLibrary
+        Include="$(BhenguNativeLibRoot)runtimes/android-x64/native/libllama.so"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/android-x64/native/libllama.so')"
+        Abi="x86_64" />
+
+    <!-- x86_64 llava -->
+    <AndroidNativeLibrary
+        Include="$(BhenguNativeLibRoot)runtimes/android-x64/native/libllava_shared.so"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/android-x64/native/libllava_shared.so')"
+        Abi="x86_64" />
+  </ItemGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       iOS — NativeReference items (static libs, linked at compile time)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios'">
+    <NativeReference
+        Include="$(BhenguNativeLibRoot)runtimes/ios-arm64/native/libllama.a"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/ios-arm64/native/libllama.a')"
+        Kind="Static"
+        SmartLink="true"
+        ForceLoad="true" />
+
+    <NativeReference
+        Include="$(BhenguNativeLibRoot)runtimes/ios-arm64/native/libllava_shared.a"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/ios-arm64/native/libllava_shared.a')"
+        Kind="Static"
+        SmartLink="true"
+        ForceLoad="true" />
+  </ItemGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       macOS Catalyst — NativeReference items (static libs)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'maccatalyst'">
+    <NativeReference
+        Include="$(BhenguNativeLibRoot)runtimes/maccatalyst-arm64/native/libllama.a"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/maccatalyst-arm64/native/libllama.a')"
+        Kind="Static"
+        SmartLink="true" />
+
+    <NativeReference
+        Include="$(BhenguNativeLibRoot)runtimes/maccatalyst-x64/native/libllama.a"
+        Condition="Exists('$(BhenguNativeLibRoot)runtimes/maccatalyst-x64/native/libllama.a')"
+        Kind="Static"
+        SmartLink="true" />
+  </ItemGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       NuGet packaging — include all runtimes/ under the package root
+       Only runs when building a NuGet package (dotnet pack).
+       ═══════════════════════════════════════════════════════════════════ -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(BhenguNativeLibRoot)runtimes/**"
+          Pack="true"
+          PackagePath="runtimes"
+          Condition="Exists('$(BhenguNativeLibRoot)runtimes/')" />
+  </ItemGroup>
+
+</Project>

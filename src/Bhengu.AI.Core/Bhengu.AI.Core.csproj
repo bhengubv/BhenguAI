@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Core</PackageId>
+    <Description>On-device AI core for Circle. Model registry, downloader (ModelScope primary / HuggingFace fallback), and local cache.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="registry.json" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+</Project>

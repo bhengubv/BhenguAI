@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ========== NUGET IDENTITY ========== -->
+  <PropertyGroup>
+    <PackageId>Bhengu.AI.Security.Aether</PackageId>
+    <Description>
+      Aether mesh bridge for Bhengu.AI.Security.
+      Translates Aether telemetry events into transport-agnostic PeerSecurityEvents
+      and adapts the transport-agnostic intelligence output to implement
+      IAetherIntelligence and IAISecurityLayer.
+      Requires Bhengu.AI.Security (base layer) and Bhengu.AI.Aether (mesh contracts).
+    </Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bhengu.AI.Security\Bhengu.AI.Security.csproj" />
+    <ProjectReference Include="..\Bhengu.AI.Aether\Bhengu.AI.Aether.csproj" />
+  </ItemGroup>
+
+</Project>
