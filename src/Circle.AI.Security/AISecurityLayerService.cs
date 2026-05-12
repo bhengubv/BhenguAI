@@ -1,45 +1,44 @@
 namespace Circle.AI.Security;
 
-using Circle.AI.Aether;
-
 // ─────────────────────────────────────────────────────────────────────────────
-// AI Security Layer — full implementation of IAISecurityLayer.
+// Transport-agnostic AI Security Layer — full implementation of IPeerSecurityLayer.
 //
 // Lifecycle:
-//   StartAsync  → wires this service as an Aether telemetry observer and
-//                 launches a background trust-recovery loop.
-//   (running)   → security events flow in via TelemetryAdapter; each event
-//                 degrades a node's trust score, then threshold evaluation
-//                 decides which SecurityDirective (if any) to issue.
-//   StopAsync   → unsubscribes from telemetry, cancels the recovery loop.
+//   StartAsync  → launches the background trust-recovery loop.
+//   (running)   → security events arrive via HandlePeerEvent(PeerSecurityEvent).
+//                 Each event degrades the peer's trust score; threshold evaluation
+//                 decides which PeerDirective (if any) to issue.
+//   StopAsync   → cancels the recovery loop, cleans up.
 //
-// Directives issued (in order of severity, highest first):
+// Any transport (Aether, WiFi, BLE, NearLink, HTTP, …) calls HandlePeerEvent
+// after translating its own event type to PeerSecurityEvent.  The bridge lives
+// in Circle.AI.Security.Aether (or the equivalent per-transport package).
+//
+// Directives issued (most-severe wins per event):
 //   QuarantineNode     trust ≤ QuarantineThreshold
 //   AvoidNode          trust ≤ AvoidNodeThreshold
 //   ElevateMonitoring  trust ≤ ElevateMonitoringThreshold
-//   ReleaseNode        (not issued automatically — see SecurityDirectiveKind docs)
+//   ReleaseNode        not issued automatically — requires explicit operator action
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Subscribes to <see cref="IAetherTelemetry"/>, degrades per-node trust
-/// scores via <see cref="ThreatDetector"/>, and issues
-/// <see cref="SecurityDirective"/> recommendations to registered
-/// <see cref="ISecurityDirectiveConsumer"/> subscribers.
+/// Transport-agnostic AI Security Layer. Degrades per-peer trust scores via
+/// <see cref="ThreatDetector"/> and issues <see cref="PeerDirective"/> recommendations
+/// to all registered <see cref="IPeerDirectiveConsumer"/> subscribers.
 /// </summary>
-public sealed class AISecurityLayerService : IAISecurityLayer
+public sealed class SecurityLayerService : IPeerSecurityLayer
 {
     private readonly NodeTrustRegistry _registry;
     private readonly SecurityOptions   _options;
     private readonly DirectivePublisher _publisher;
 
-    private IDisposable?             _telemetrySubscription;
     private CancellationTokenSource? _cts;
     private Task?                    _recoveryLoop;
     private volatile bool            _active;
 
-    public AISecurityLayerService(
-        NodeTrustRegistry registry,
-        SecurityOptions   options,
+    public SecurityLayerService(
+        NodeTrustRegistry  registry,
+        SecurityOptions    options,
         DirectivePublisher publisher)
     {
         _registry  = registry;
@@ -47,13 +46,12 @@ public sealed class AISecurityLayerService : IAISecurityLayer
         _publisher = publisher;
     }
 
-    // ─── IAISecurityLayer ────────────────────────────────────────────────────
+    // ─── IPeerSecurityLayer ───────────────────────────────────────────────────
 
     /// <inheritdoc />
-    public Task StartAsync(IAetherTelemetry telemetry, CancellationToken ct = default)
+    public Task StartAsync(CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(telemetry);
-        _telemetrySubscription = telemetry.Subscribe(new TelemetryAdapter(this));
+        if (_active) return Task.CompletedTask;
         _cts          = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _recoveryLoop = RunRecoveryLoopAsync(_cts.Token);
         _active       = true;
@@ -64,8 +62,6 @@ public sealed class AISecurityLayerService : IAISecurityLayer
     public async Task StopAsync(CancellationToken ct = default)
     {
         _active = false;
-        _telemetrySubscription?.Dispose();
-        _telemetrySubscription = null;
 
         if (_cts is not null)
         {
@@ -83,13 +79,36 @@ public sealed class AISecurityLayerService : IAISecurityLayer
     }
 
     /// <inheritdoc />
-    public IDisposable SubscribeToDirectives(ISecurityDirectiveConsumer consumer)
+    /// <remarks>
+    /// Call this from any transport adapter after translating its native event
+    /// type to <see cref="PeerSecurityEvent"/>. Thread-safe.
+    /// </remarks>
+    public void HandlePeerEvent(PeerSecurityEvent e)
+    {
+        var degradation = ThreatDetector.ComputeDegradation(e);
+        if (degradation <= 0) return;   // PeerThreatLevel.None — no trust impact
+
+        var (previous, current) = _registry.ApplyDegradation(e, degradation);
+        EvaluateThresholds(e.NodeId, previous, current, e.Description);
+    }
+
+    /// <summary>
+    /// Notify the security layer that a peer has left.
+    /// Trust entry is preserved for historical queries; no directive is issued.
+    /// </summary>
+    public void HandlePeerLeft(string nodeId)
+    {
+        // Trust entry retained for forensic queries; no action required on departure.
+    }
+
+    /// <inheritdoc />
+    public IDisposable SubscribeToDirectives(IPeerDirectiveConsumer consumer)
         => _publisher.Subscribe(consumer);
 
     /// <inheritdoc />
-    public Task<SecurityPosture> GetPostureAsync(CancellationToken ct = default)
+    public Task<PeerSecurityPosture> GetPostureAsync(CancellationToken ct = default)
     {
-        var nodeIds    = _registry.AllNodeIds.ToList();
+        var nodeIds     = _registry.AllNodeIds.ToList();
         var quarantined = nodeIds.Count(
             id => _registry.GetTrustScore(id) <= _options.QuarantineThreshold);
         var monitored   = nodeIds.Count(id =>
@@ -104,7 +123,7 @@ public sealed class AISecurityLayerService : IAISecurityLayer
             : nodeIds.Min(id => _registry.GetTrustScore(id));
         var overallThreat = ScoreToThreatLevel(worstScore);
 
-        return Task.FromResult(new SecurityPosture(
+        return Task.FromResult(new PeerSecurityPosture(
             overallThreat,
             quarantined,
             monitored,
@@ -112,70 +131,52 @@ public sealed class AISecurityLayerService : IAISecurityLayer
             DateTimeOffset.UtcNow));
     }
 
-    // ─── Event handling ──────────────────────────────────────────────────────
-
-    internal void HandleSecurityEvent(AetherSecurityEvent e)
-    {
-        var degradation = ThreatDetector.ComputeDegradation(e);
-        if (degradation <= 0) return;                               // None threat level
-
-        var (previous, current) = _registry.ApplyDegradation(e, degradation);
-        EvaluateThresholds(e.NodeId, previous, current, e.Description);
-    }
-
-    internal void HandleNodeEvent(AetherNodeEvent e)
-    {
-        // Left events: node is gone — no further action.
-        // Trust entry is preserved for historical queries.
-    }
-
-    // ─── Threshold evaluation ────────────────────────────────────────────────
+    // ─── Threshold evaluation ─────────────────────────────────────────────────
 
     private void EvaluateThresholds(
         string nodeId, double previous, double current, string reason)
     {
-        // Evaluate from most-severe to least; issue at most one directive
-        // per event (the most severe crossing wins).
+        // Evaluate from most-severe to least; issue at most one directive per event.
 
         if (previous > _options.QuarantineThreshold
          && current  <= _options.QuarantineThreshold)
         {
-            IssueDirective(SecurityDirectiveKind.QuarantineNode, nodeId,
-                current, reason, AetherThreatLevel.Critical);
+            IssueDirective(PeerDirectiveKind.QuarantineNode, nodeId,
+                current, reason, PeerThreatLevel.Critical);
             return;
         }
 
         if (previous > _options.AvoidNodeThreshold
          && current  <= _options.AvoidNodeThreshold)
         {
-            IssueDirective(SecurityDirectiveKind.AvoidNode, nodeId,
-                current, reason, AetherThreatLevel.High);
+            IssueDirective(PeerDirectiveKind.AvoidNode, nodeId,
+                current, reason, PeerThreatLevel.High);
             return;
         }
 
         if (previous > _options.ElevateMonitoringThreshold
          && current  <= _options.ElevateMonitoringThreshold)
         {
-            IssueDirective(SecurityDirectiveKind.ElevateMonitoring, nodeId,
-                current, reason, AetherThreatLevel.Medium);
+            IssueDirective(PeerDirectiveKind.ElevateMonitoring, nodeId,
+                current, reason, PeerThreatLevel.Medium);
         }
     }
 
     private void IssueDirective(
-        SecurityDirectiveKind kind, string nodeId, double trustScore,
-        string reason, AetherThreatLevel threatLevel)
+        PeerDirectiveKind kind, string nodeId, double trustScore,
+        string reason, PeerThreatLevel threatLevel)
     {
-        _publisher.Publish(new SecurityDirective(
+        _publisher.Publish(new PeerDirective(
             kind,
-            TargetNodeId:      nodeId,
-            TrustScoreOverride: trustScore,
-            ThreatLevel:       threatLevel,
-            Reason:            reason,
-            Duration:          null,          // permanent until ReleaseNode
-            IssuedAt:          DateTimeOffset.UtcNow));
+            TargetNodeId: nodeId,
+            TrustScore:   trustScore,
+            ThreatLevel:  threatLevel,
+            Reason:       reason,
+            Duration:     null,               // permanent until ReleaseNode
+            IssuedAt:     DateTimeOffset.UtcNow));
     }
 
-    // ─── Background recovery loop ────────────────────────────────────────────
+    // ─── Background recovery loop ─────────────────────────────────────────────
 
     private async Task RunRecoveryLoopAsync(CancellationToken ct)
     {
@@ -191,32 +192,14 @@ public sealed class AISecurityLayerService : IAISecurityLayer
         }
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private static AetherThreatLevel ScoreToThreatLevel(double score) => score switch
+    private static PeerThreatLevel ScoreToThreatLevel(double score) => score switch
     {
-        <= 0.25 => AetherThreatLevel.Critical,
-        <= 0.50 => AetherThreatLevel.High,
-        <= 0.75 => AetherThreatLevel.Medium,
-        <= 0.90 => AetherThreatLevel.Low,
-        _       => AetherThreatLevel.None,
+        <= 0.25 => PeerThreatLevel.Critical,
+        <= 0.50 => PeerThreatLevel.High,
+        <= 0.75 => PeerThreatLevel.Medium,
+        <= 0.90 => PeerThreatLevel.Low,
+        _       => PeerThreatLevel.None,
     };
-
-    // ─── Telemetry adapter ────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Routes IAetherTelemetryObserver callbacks into AISecurityLayerService
-    /// without exposing the observer interface on the public type.
-    /// </summary>
-    private sealed class TelemetryAdapter : IAetherTelemetryObserver
-    {
-        private readonly AISecurityLayerService _owner;
-        internal TelemetryAdapter(AISecurityLayerService owner) => _owner = owner;
-
-        public void OnSecurityEvent(AetherSecurityEvent e)  => _owner.HandleSecurityEvent(e);
-        public void OnNodeEvent(AetherNodeEvent e)           => _owner.HandleNodeEvent(e);
-        public void OnTransportEvent(AetherTransportEvent e) { }
-        public void OnRouteEvent(AetherRouteEvent e)         { }
-        public void OnNetworkEvent(AetherNetworkEvent e)     { }
-    }
 }

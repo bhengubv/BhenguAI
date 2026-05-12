@@ -6,20 +6,21 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Circle.AI.Aether;
 using Circle.AI.Security;
+using Circle.AI.Security.Aether;
 using Xunit;
 
 namespace Circle.AI.Tests;
 
-// ─── Test helpers ────────────────────────────────────────────────────────────
+// ─── Test helpers ─────────────────────────────────────────────────────────────
 
 file static class Make
 {
     public static SecurityOptions Opts(
-        double elevate   = 0.75,
-        double avoid     = 0.50,
+        double elevate    = 0.75,
+        double avoid      = 0.50,
         double quarantine = 0.25,
-        double initial   = 1.0,
-        double recovery  = 0.001) => new()
+        double initial    = 1.0,
+        double recovery   = 0.001) => new()
     {
         ElevateMonitoringThreshold = elevate,
         AvoidNodeThreshold         = avoid,
@@ -30,12 +31,28 @@ file static class Make
         MaxEventsPerNode           = 10,
     };
 
-    public static AetherSecurityEvent Sec(
-        string nodeId             = "n1",
-        AetherSecurityEventKind kind  = AetherSecurityEventKind.RoutingAnomaly,
-        AetherThreatLevel level   = AetherThreatLevel.Medium,
-        string description        = "test",
-        DateTimeOffset? at        = null) =>
+    /// <summary>
+    /// Transport-agnostic peer event — used by ThreatDetector, NodeTrustRegistry,
+    /// and PeerIntelligenceService tests that work directly with the security base layer.
+    /// </summary>
+    public static PeerSecurityEvent Sec(
+        string nodeId                 = "n1",
+        PeerSecurityEventKind kind    = PeerSecurityEventKind.RoutingAnomaly,
+        PeerThreatLevel level         = PeerThreatLevel.Medium,
+        string description            = "test",
+        DateTimeOffset? at            = null) =>
+        new(nodeId, kind, level, description, "test", at ?? DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// Aether-specific event — used by AetherSecurityBridge tests that fire
+    /// events through ManualTelemetry (the Aether telemetry stub).
+    /// </summary>
+    public static AetherSecurityEvent AetherSec(
+        string nodeId                     = "n1",
+        AetherSecurityEventKind kind      = AetherSecurityEventKind.RoutingAnomaly,
+        AetherThreatLevel level           = AetherThreatLevel.Medium,
+        string description                = "test",
+        DateTimeOffset? at                = null) =>
         new(nodeId, kind, level, description,
             new Dictionary<string, string>(),
             at ?? DateTimeOffset.UtcNow);
@@ -44,7 +61,21 @@ file static class Make
         new(opts ?? Opts());
 }
 
-file sealed class CapturingConsumer : ISecurityDirectiveConsumer
+/// <summary>
+/// Captures transport-agnostic PeerDirectives published directly by DirectivePublisher.
+/// Used in DirectivePublisherTests.
+/// </summary>
+file sealed class CapturingPeerConsumer : IPeerDirectiveConsumer
+{
+    public List<PeerDirective> Received { get; } = new();
+    public void OnDirective(PeerDirective d) => Received.Add(d);
+}
+
+/// <summary>
+/// Captures Aether SecurityDirectives translated by AetherSecurityBridge.
+/// Used in AetherSecurityBridgeTests.
+/// </summary>
+file sealed class CapturingAetherConsumer : ISecurityDirectiveConsumer
 {
     public List<SecurityDirective> Received { get; } = new();
     public void OnDirective(SecurityDirective d) => Received.Add(d);
@@ -85,43 +116,43 @@ public sealed class ThreatDetectorDegradationTests
     [Fact] public void IntrusionCritical_IsHighestDegradation() =>
         Assert.True(
             ThreatDetector.ComputeDegradation(
-                Make.Sec(kind: AetherSecurityEventKind.IntrusionSignal,
-                         level: AetherThreatLevel.Critical)) >
+                Make.Sec(kind: PeerSecurityEventKind.IntrusionSignal,
+                         level: PeerThreatLevel.Critical)) >
             ThreatDetector.ComputeDegradation(
-                Make.Sec(kind: AetherSecurityEventKind.NodeAuthAttempt,
-                         level: AetherThreatLevel.Low)));
+                Make.Sec(kind: PeerSecurityEventKind.AuthAttempt,
+                         level: PeerThreatLevel.Low)));
 
     [Fact] public void ThreatNone_AlwaysZero() =>
         Assert.Equal(0.0,
             ThreatDetector.ComputeDegradation(
-                Make.Sec(level: AetherThreatLevel.None)));
+                Make.Sec(level: PeerThreatLevel.None)));
 
     [Fact] public void RoutingAnomalyMedium_EqualsBaseWeight()
     {
         var result = ThreatDetector.ComputeDegradation(
-            Make.Sec(kind: AetherSecurityEventKind.RoutingAnomaly,
-                     level: AetherThreatLevel.Medium));
+            Make.Sec(kind: PeerSecurityEventKind.RoutingAnomaly,
+                     level: PeerThreatLevel.Medium));
         Assert.Equal(0.10, result, precision: 5);
     }
 
     [Fact] public void RoutingAnomalyHigh_IsTwiceBaseWeight()
     {
         var medium = ThreatDetector.ComputeDegradation(
-            Make.Sec(kind: AetherSecurityEventKind.RoutingAnomaly,
-                     level: AetherThreatLevel.Medium));
+            Make.Sec(kind: PeerSecurityEventKind.RoutingAnomaly,
+                     level: PeerThreatLevel.Medium));
         var high = ThreatDetector.ComputeDegradation(
-            Make.Sec(kind: AetherSecurityEventKind.RoutingAnomaly,
-                     level: AetherThreatLevel.High));
+            Make.Sec(kind: PeerSecurityEventKind.RoutingAnomaly,
+                     level: PeerThreatLevel.High));
         Assert.Equal(medium * 2, high, precision: 5);
     }
 
     [Fact] public void AllEventKinds_NonNoneLevel_Positive()
     {
-        var kinds = Enum.GetValues<AetherSecurityEventKind>();
+        var kinds = Enum.GetValues<PeerSecurityEventKind>();
         foreach (var kind in kinds)
         {
             var deg = ThreatDetector.ComputeDegradation(
-                Make.Sec(kind: kind, level: AetherThreatLevel.Medium));
+                Make.Sec(kind: kind, level: PeerThreatLevel.Medium));
             Assert.True(deg > 0, $"{kind} should produce positive degradation");
         }
     }
@@ -129,19 +160,19 @@ public sealed class ThreatDetectorDegradationTests
     [Fact] public void PrivilegeAttemptHigh_ExceedsEncryptionHigh()
     {
         var priv = ThreatDetector.ComputeDegradation(
-            Make.Sec(kind: AetherSecurityEventKind.PrivilegeAttempt,
-                     level: AetherThreatLevel.High));
+            Make.Sec(kind: PeerSecurityEventKind.PrivilegeAttempt,
+                     level: PeerThreatLevel.High));
         var enc = ThreatDetector.ComputeDegradation(
-            Make.Sec(kind: AetherSecurityEventKind.EncryptionEvent,
-                     level: AetherThreatLevel.High));
+            Make.Sec(kind: PeerSecurityEventKind.EncryptionEvent,
+                     level: PeerThreatLevel.High));
         Assert.True(priv > enc);
     }
 }
 
 public sealed class ThreatDetectorIndicatorTests
 {
-    private static AetherSecurityEvent Recent(
-        AetherSecurityEventKind kind, AetherThreatLevel level = AetherThreatLevel.Medium) =>
+    private static PeerSecurityEvent Recent(
+        PeerSecurityEventKind kind, PeerThreatLevel level = PeerThreatLevel.Medium) =>
         Make.Sec(kind: kind, level: level, at: DateTimeOffset.UtcNow.AddSeconds(-10));
 
     [Fact] public void NoEvents_ReturnsEmpty() =>
@@ -150,7 +181,7 @@ public sealed class ThreatDetectorIndicatorTests
     [Fact] public void ThreeAuthAttempts_FlagsRepeatedAuth()
     {
         var events = Enumerable.Range(0, 3)
-            .Select(_ => Recent(AetherSecurityEventKind.NodeAuthAttempt))
+            .Select(_ => Recent(PeerSecurityEventKind.AuthAttempt))
             .ToList();
         Assert.Contains("repeated-auth-attempts",
             ThreatDetector.DetectIndicators(events, TimeSpan.FromMinutes(5)));
@@ -159,7 +190,7 @@ public sealed class ThreatDetectorIndicatorTests
     [Fact] public void TwoAuthAttempts_NoFlag()
     {
         var events = Enumerable.Range(0, 2)
-            .Select(_ => Recent(AetherSecurityEventKind.NodeAuthAttempt))
+            .Select(_ => Recent(PeerSecurityEventKind.AuthAttempt))
             .ToList();
         Assert.DoesNotContain("repeated-auth-attempts",
             ThreatDetector.DetectIndicators(events, TimeSpan.FromMinutes(5)));
@@ -168,22 +199,22 @@ public sealed class ThreatDetectorIndicatorTests
     [Fact] public void IntrusionSignal_FlagsDetected() =>
         Assert.Contains("intrusion-signal-detected",
             ThreatDetector.DetectIndicators(
-                [Recent(AetherSecurityEventKind.IntrusionSignal)],
+                [Recent(PeerSecurityEventKind.IntrusionSignal)],
                 TimeSpan.FromMinutes(5)));
 
     [Fact] public void HighSeverityEvent_FlagsHighSeverity() =>
         Assert.Contains("high-severity-event",
             ThreatDetector.DetectIndicators(
-                [Recent(AetherSecurityEventKind.RoutingAnomaly, AetherThreatLevel.High)],
+                [Recent(PeerSecurityEventKind.RoutingAnomaly, PeerThreatLevel.High)],
                 TimeSpan.FromMinutes(5)));
 
     [Fact] public void ThreeDistinctKinds_FlagsMultiVector()
     {
         var events = new[]
         {
-            Recent(AetherSecurityEventKind.NodeAuthAttempt),
-            Recent(AetherSecurityEventKind.RoutingAnomaly),
-            Recent(AetherSecurityEventKind.EncryptionEvent),
+            Recent(PeerSecurityEventKind.AuthAttempt),
+            Recent(PeerSecurityEventKind.RoutingAnomaly),
+            Recent(PeerSecurityEventKind.EncryptionEvent),
         };
         Assert.Contains("multi-vector-activity",
             ThreatDetector.DetectIndicators(events, TimeSpan.FromMinutes(5)));
@@ -192,12 +223,12 @@ public sealed class ThreatDetectorIndicatorTests
     [Fact] public void PrivilegeAttempt_FlaggedSeparately() =>
         Assert.Contains("privilege-escalation-attempt",
             ThreatDetector.DetectIndicators(
-                [Recent(AetherSecurityEventKind.PrivilegeAttempt)],
+                [Recent(PeerSecurityEventKind.PrivilegeAttempt)],
                 TimeSpan.FromMinutes(5)));
 
     [Fact] public void OldEventsOutsideWindow_Ignored()
     {
-        var old = Make.Sec(kind: AetherSecurityEventKind.IntrusionSignal,
+        var old = Make.Sec(kind: PeerSecurityEventKind.IntrusionSignal,
                            at: DateTimeOffset.UtcNow.AddHours(-1));
         Assert.DoesNotContain("intrusion-signal-detected",
             ThreatDetector.DetectIndicators([old], TimeSpan.FromMinutes(5)));
@@ -242,15 +273,15 @@ public sealed class NodeTrustRegistryTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
         var update = await reg.TrustScoreUpdates.ReadAsync(cts.Token);
         Assert.Equal("n", update.NodeId);
-        Assert.Equal(0.90, update.CurrentScore, precision: 5);
+        Assert.Equal(0.90, update.NewScore, precision: 5);
     }
 
     [Fact] public void ApplyDegradation_NoneLevel_ZeroDegradation_NoPublish()
     {
         // Zero degradation → previous == current → no publish
-        var reg     = Make.Registry();
-        var secEvt  = Make.Sec(level: AetherThreatLevel.None);
-        var deg     = ThreatDetector.ComputeDegradation(secEvt);   // 0
+        var reg    = Make.Registry();
+        var secEvt = Make.Sec(level: PeerThreatLevel.None);
+        var deg    = ThreatDetector.ComputeDegradation(secEvt);   // 0
         reg.ApplyDegradation(secEvt, deg);
 
         Assert.False(reg.TrustScoreUpdates.TryRead(out _));
@@ -333,20 +364,24 @@ public sealed class NodeTrustRegistryTests
 
 public sealed class DirectivePublisherTests
 {
-    private static SecurityDirective ADirective() =>
-        new(SecurityDirectiveKind.AvoidNode, "n1", null,
-            AetherThreatLevel.High, "test", null, DateTimeOffset.UtcNow);
+    private static PeerDirective ADirective() =>
+        new(PeerDirectiveKind.AvoidNode, "n1",
+            TrustScore:  0.40,
+            ThreatLevel: PeerThreatLevel.High,
+            Reason:      "test",
+            Duration:    null,
+            IssuedAt:    DateTimeOffset.UtcNow);
 
     [Fact] public void Subscribe_ReturnsNonNullHandle()
     {
         var pub = new DirectivePublisher();
-        Assert.NotNull(pub.Subscribe(new CapturingConsumer()));
+        Assert.NotNull(pub.Subscribe(new CapturingPeerConsumer()));
     }
 
     [Fact] public void Publish_DeliversToSubscriber()
     {
         var pub      = new DirectivePublisher();
-        var consumer = new CapturingConsumer();
+        var consumer = new CapturingPeerConsumer();
         pub.Subscribe(consumer);
         pub.Publish(ADirective());
         Assert.Single(consumer.Received);
@@ -361,8 +396,8 @@ public sealed class DirectivePublisherTests
     [Fact] public void Publish_MultipleConsumers_AllReceive()
     {
         var pub = new DirectivePublisher();
-        var c1  = new CapturingConsumer();
-        var c2  = new CapturingConsumer();
+        var c1  = new CapturingPeerConsumer();
+        var c2  = new CapturingPeerConsumer();
         pub.Subscribe(c1);
         pub.Subscribe(c2);
         pub.Publish(ADirective());
@@ -373,7 +408,7 @@ public sealed class DirectivePublisherTests
     [Fact] public void Dispose_RemovesConsumer()
     {
         var pub      = new DirectivePublisher();
-        var consumer = new CapturingConsumer();
+        var consumer = new CapturingPeerConsumer();
         var handle   = pub.Subscribe(consumer);
         handle.Dispose();
         pub.Publish(ADirective());
@@ -383,7 +418,7 @@ public sealed class DirectivePublisherTests
     [Fact] public void Dispose_Twice_DoesNotThrow()
     {
         var pub    = new DirectivePublisher();
-        var handle = pub.Subscribe(new CapturingConsumer());
+        var handle = pub.Subscribe(new CapturingPeerConsumer());
         handle.Dispose();
         handle.Dispose(); // idempotent
     }
@@ -396,25 +431,28 @@ public sealed class DirectivePublisherTests
     {
         var pub = new DirectivePublisher();
         Assert.Equal(0, pub.SubscriberCount);
-        var h = pub.Subscribe(new CapturingConsumer());
+        var h = pub.Subscribe(new CapturingPeerConsumer());
         Assert.Equal(1, pub.SubscriberCount);
         h.Dispose();
         Assert.Equal(0, pub.SubscriberCount);
     }
 }
 
-// ─── AISecurityLayerService tests ─────────────────────────────────────────────
+// ─── AetherSecurityBridge tests ───────────────────────────────────────────────
+// These tests exercise the full Aether integration path:
+// ManualTelemetry → AetherSecurityBridge → SecurityLayerService → directives.
 
-public sealed class AISecurityLayerServiceTests
+public sealed class AetherSecurityBridgeTests
 {
-    private static (AISecurityLayerService svc, NodeTrustRegistry reg, DirectivePublisher pub)
+    private static (AetherSecurityBridge bridge, NodeTrustRegistry reg, DirectivePublisher pub)
         BuildSvc(SecurityOptions? opts = null)
     {
-        var o   = opts ?? Make.Opts();
-        var reg = new NodeTrustRegistry(o);
-        var pub = new DirectivePublisher();
-        var svc = new AISecurityLayerService(reg, o, pub);
-        return (svc, reg, pub);
+        var o      = opts ?? Make.Opts();
+        var reg    = new NodeTrustRegistry(o);
+        var pub    = new DirectivePublisher();
+        var layer  = new SecurityLayerService(reg, o, pub);
+        var bridge = new AetherSecurityBridge(layer);
+        return (bridge, reg, pub);
     }
 
     [Fact] public async Task StartAsync_AcceptsTelemetryWithoutThrowing()
@@ -437,7 +475,7 @@ public sealed class AISecurityLayerServiceTests
         var tel = new ManualTelemetry();
         await svc.StartAsync(tel);
 
-        tel.FireSecurity(Make.Sec("node-A",
+        tel.FireSecurity(Make.AetherSec("node-A",
             kind: AetherSecurityEventKind.RoutingAnomaly,
             level: AetherThreatLevel.Medium));  // −0.10
 
@@ -451,7 +489,7 @@ public sealed class AISecurityLayerServiceTests
         var tel = new ManualTelemetry();
         await svc.StartAsync(tel);
 
-        tel.FireSecurity(Make.Sec("n", level: AetherThreatLevel.None));
+        tel.FireSecurity(Make.AetherSec("n", level: AetherThreatLevel.None));
         Assert.Equal(1.0, reg.GetTrustScore("n"), precision: 5);
         await svc.StopAsync();
     }
@@ -460,13 +498,13 @@ public sealed class AISecurityLayerServiceTests
     {
         // Start score at exactly 0.80 so one RoutingAnomaly/Medium (−0.10) crosses 0.75
         var opts     = Make.Opts(elevate: 0.75, avoid: 0.50, quarantine: 0.25, initial: 0.80);
-        var (svc, _, pub) = BuildSvc(opts);
-        var consumer = new CapturingConsumer();
-        pub.Subscribe(consumer);
+        var (svc, _, _) = BuildSvc(opts);
+        var consumer = new CapturingAetherConsumer();
         var tel = new ManualTelemetry();
         await svc.StartAsync(tel);
+        svc.SubscribeToDirectives(consumer);
 
-        tel.FireSecurity(Make.Sec("n",
+        tel.FireSecurity(Make.AetherSec("n",
             kind: AetherSecurityEventKind.RoutingAnomaly,
             level: AetherThreatLevel.Medium));   // 0.80 → 0.70 (crosses 0.75)
 
@@ -479,14 +517,14 @@ public sealed class AISecurityLayerServiceTests
     [Fact] public async Task SecurityEvent_CrossesAvoidNode_IssuesAvoidDirective()
     {
         var opts     = Make.Opts(elevate: 0.75, avoid: 0.50, quarantine: 0.25, initial: 0.60);
-        var (svc, _, pub) = BuildSvc(opts);
-        var consumer = new CapturingConsumer();
-        pub.Subscribe(consumer);
+        var (svc, _, _) = BuildSvc(opts);
+        var consumer = new CapturingAetherConsumer();
         var tel = new ManualTelemetry();
         await svc.StartAsync(tel);
+        svc.SubscribeToDirectives(consumer);
 
         // 0.60 − 0.30 (Intrusion/High = 0.15×2) = 0.30 → crosses 0.50
-        tel.FireSecurity(Make.Sec("n",
+        tel.FireSecurity(Make.AetherSec("n",
             kind: AetherSecurityEventKind.IntrusionSignal,
             level: AetherThreatLevel.High));
 
@@ -498,14 +536,14 @@ public sealed class AISecurityLayerServiceTests
     [Fact] public async Task SecurityEvent_CrossesQuarantine_IssuesQuarantineDirective()
     {
         var opts     = Make.Opts(elevate: 0.75, avoid: 0.50, quarantine: 0.25, initial: 0.30);
-        var (svc, _, pub) = BuildSvc(opts);
-        var consumer = new CapturingConsumer();
-        pub.Subscribe(consumer);
+        var (svc, _, _) = BuildSvc(opts);
+        var consumer = new CapturingAetherConsumer();
         var tel = new ManualTelemetry();
         await svc.StartAsync(tel);
+        svc.SubscribeToDirectives(consumer);
 
         // 0.30 − 0.45 (Intrusion/Critical = 0.15×3) → 0.0, crosses 0.25
-        tel.FireSecurity(Make.Sec("n",
+        tel.FireSecurity(Make.AetherSec("n",
             kind: AetherSecurityEventKind.IntrusionSignal,
             level: AetherThreatLevel.Critical));
 
@@ -519,13 +557,13 @@ public sealed class AISecurityLayerServiceTests
     {
         // Start below quarantine threshold; no crossing can occur downward
         var opts     = Make.Opts(elevate: 0.75, avoid: 0.50, quarantine: 0.25, initial: 0.10);
-        var (svc, _, pub) = BuildSvc(opts);
-        var consumer = new CapturingConsumer();
-        pub.Subscribe(consumer);
+        var (svc, _, _) = BuildSvc(opts);
+        var consumer = new CapturingAetherConsumer();
         var tel = new ManualTelemetry();
         await svc.StartAsync(tel);
+        svc.SubscribeToDirectives(consumer);
 
-        tel.FireSecurity(Make.Sec("n",
+        tel.FireSecurity(Make.AetherSec("n",
             kind: AetherSecurityEventKind.RoutingAnomaly,
             level: AetherThreatLevel.Low));   // −0.05, stays ≤ 0.25
 
@@ -537,12 +575,12 @@ public sealed class AISecurityLayerServiceTests
     {
         var opts     = Make.Opts(initial: 0.80);
         var (svc, _, _) = BuildSvc(opts);
-        var consumer = new CapturingConsumer();
+        var consumer = new CapturingAetherConsumer();
         var tel      = new ManualTelemetry();
         await svc.StartAsync(tel);
         svc.SubscribeToDirectives(consumer);
 
-        tel.FireSecurity(Make.Sec("n",
+        tel.FireSecurity(Make.AetherSec("n",
             kind: AetherSecurityEventKind.RoutingAnomaly,
             level: AetherThreatLevel.Medium));   // 0.80 → 0.70
 
@@ -554,13 +592,13 @@ public sealed class AISecurityLayerServiceTests
     {
         var opts     = Make.Opts(initial: 0.80);
         var (svc, _, _) = BuildSvc(opts);
-        var consumer = new CapturingConsumer();
+        var consumer = new CapturingAetherConsumer();
         var tel      = new ManualTelemetry();
         await svc.StartAsync(tel);
         var handle = svc.SubscribeToDirectives(consumer);
         handle.Dispose();
 
-        tel.FireSecurity(Make.Sec("n",
+        tel.FireSecurity(Make.AetherSec("n",
             kind: AetherSecurityEventKind.RoutingAnomaly,
             level: AetherThreatLevel.Medium));
 
@@ -599,13 +637,19 @@ public sealed class AISecurityLayerServiceTests
     }
 }
 
-// ─── AetherIntelligenceService tests ─────────────────────────────────────────
+// ─── AetherIntelligenceAdapter tests ─────────────────────────────────────────
+// These tests exercise PeerIntelligenceService through the AetherIntelligenceAdapter
+// to validate both the intelligence logic and the Aether type mapping.
 
-public sealed class AetherIntelligenceServiceTests
+public sealed class AetherIntelligenceAdapterTests
 {
-    private static AetherIntelligenceService BuildSvc(
-        NodeTrustRegistry reg, SecurityOptions? opts = null) =>
-        new(reg, opts ?? Make.Opts());
+    private static AetherIntelligenceAdapter BuildSvc(
+        NodeTrustRegistry reg, SecurityOptions? opts = null)
+    {
+        var o    = opts ?? Make.Opts();
+        var peer = new PeerIntelligenceService(reg, o);
+        return new AetherIntelligenceAdapter(peer);
+    }
 
     [Fact] public async Task NetworkHealth_NoNodes_ReturnsOnePointZero()
     {
@@ -680,8 +724,8 @@ public sealed class AetherIntelligenceServiceTests
         for (var i = 0; i < 3; i++)
             reg.ApplyDegradation(
                 Make.Sec("n",
-                    kind: AetherSecurityEventKind.NodeAuthAttempt,
-                    level: AetherThreatLevel.Low,
+                    kind: PeerSecurityEventKind.AuthAttempt,
+                    level: PeerThreatLevel.Low,
                     at: DateTimeOffset.UtcNow.AddSeconds(-i)),
                 0.01);
 

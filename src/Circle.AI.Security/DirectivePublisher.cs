@@ -1,23 +1,23 @@
 namespace Circle.AI.Security;
 
-using Circle.AI.Aether;
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Fan-out publisher for SecurityDirectives.
+// Fan-out publisher for PeerDirectives.
 //
-// Keeps a list of ISecurityDirectiveConsumer subscriptions and fans every
+// Keeps a list of IPeerDirectiveConsumer subscriptions and fans every
 // published directive out to all current subscribers. Concurrent subscribe,
-// unsubscribe, and publish operations are all safe.
+// unsubscribe, and publish operations are all thread-safe.
+//
+// Transport-agnostic: no dependency on any transport package.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Manages <see cref="ISecurityDirectiveConsumer"/> subscriptions and fans
-/// published <see cref="SecurityDirective"/> instances out to all subscribers.
+/// Manages <see cref="IPeerDirectiveConsumer"/> subscriptions and fans
+/// published <see cref="PeerDirective"/> instances out to all subscribers.
 /// </summary>
 public sealed class DirectivePublisher
 {
     private readonly object _lock = new();
-    private readonly List<ISecurityDirectiveConsumer> _consumers = new();
+    private readonly List<IPeerDirectiveConsumer> _consumers = new();
 
     // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ public sealed class DirectivePublisher
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="consumer"/> is null.
     /// </exception>
-    public IDisposable Subscribe(ISecurityDirectiveConsumer consumer)
+    public IDisposable Subscribe(IPeerDirectiveConsumer consumer)
     {
         ArgumentNullException.ThrowIfNull(consumer);
         lock (_lock) _consumers.Add(consumer);
@@ -37,11 +37,11 @@ public sealed class DirectivePublisher
 
     /// <summary>
     /// Publishes <paramref name="directive"/> to all current subscribers.
-    /// Snapshot is taken under the lock; callbacks fire outside it.
+    /// A snapshot is taken under the lock; callbacks fire outside it.
     /// </summary>
-    public void Publish(SecurityDirective directive)
+    public void Publish(PeerDirective directive)
     {
-        ISecurityDirectiveConsumer[] snapshot;
+        IPeerDirectiveConsumer[] snapshot;
         lock (_lock) snapshot = [.. _consumers];
 
         foreach (var c in snapshot)
@@ -56,7 +56,7 @@ public sealed class DirectivePublisher
 
     // ─── Private ─────────────────────────────────────────────────────────────
 
-    private void Unsubscribe(ISecurityDirectiveConsumer consumer)
+    private void Unsubscribe(IPeerDirectiveConsumer consumer)
     {
         lock (_lock) _consumers.Remove(consumer);
     }
@@ -64,11 +64,11 @@ public sealed class DirectivePublisher
     private sealed class SubscriptionHandle : IDisposable
     {
         private readonly DirectivePublisher _publisher;
-        private readonly ISecurityDirectiveConsumer _consumer;
+        private readonly IPeerDirectiveConsumer _consumer;
         private int _disposed;
 
         internal SubscriptionHandle(
-            DirectivePublisher publisher, ISecurityDirectiveConsumer consumer)
+            DirectivePublisher publisher, IPeerDirectiveConsumer consumer)
         {
             _publisher = publisher;
             _consumer  = consumer;

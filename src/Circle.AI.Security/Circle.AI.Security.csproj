@@ -3,7 +3,12 @@
   <!-- ========== NUGET IDENTITY ========== -->
   <PropertyGroup>
     <PackageId>Circle.AI.Security</PackageId>
-    <Description>AI Security Layer for Circle. Trust scoring, threat detection, and security directives over the Aether mesh network.</Description>
+    <Description>
+      Transport-agnostic AI Security Layer for Circle AI.
+      Trust scoring, threat detection, and security directives work across
+      any network transport (WiFi, BLE, NearLink, HTTP, Aether mesh, etc.).
+      For Aether-specific telemetry integration, add Circle.AI.Security.Aether.
+    </Description>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -12,7 +17,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Circle.AI.Aether\Circle.AI.Aether.csproj" />
-  </ItemGroup>
+  <!-- No transport dependencies — security primitives are self-contained. -->
+
 </Project>

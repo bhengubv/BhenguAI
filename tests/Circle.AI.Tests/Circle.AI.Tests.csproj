@@ -34,5 +34,6 @@
     <ProjectReference Include="..\..\src\Circle.AI.Skills\Circle.AI.Skills.csproj" />
     <ProjectReference Include="..\..\src\Circle.AI.Aether\Circle.AI.Aether.csproj" />
     <ProjectReference Include="..\..\src\Circle.AI.Security\Circle.AI.Security.csproj" />
+    <ProjectReference Include="..\..\src\Circle.AI.Security.Aether\Circle.AI.Security.Aether.csproj" />
   </ItemGroup>
 </Project>

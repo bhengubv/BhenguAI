@@ -1,99 +1,102 @@
 namespace Circle.AI.Security;
 
 using System.Runtime.CompilerServices;
-using Circle.AI.Aether;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Intelligence output — full implementation of IAetherIntelligence.
+// Transport-agnostic intelligence output — full implementation of IPeerIntelligence.
 //
 // Reads trust scores and event history from NodeTrustRegistry and packages
-// them as the four intelligence outputs consumed by apps and the Security Layer:
+// them as the four intelligence outputs consumed by apps and the security layer:
 //
-//   NetworkHealthReport     aggregate mesh health (overall score, counts)
-//   ThreatAssessment        per-node confidence + level + indicators
-//   RoutingAdvice           trust-aware path with avoid-list
-//   TrustScoreUpdate stream live channel of every score change
+//   PeerNetworkHealthReport   aggregate health (overall score, counts)
+//   PeerThreatAssessment      per-peer confidence + level + indicators
+//   PeerRoutingAdvice         trust-aware path with avoid-list
+//   PeerTrustScoreUpdate      live channel of every score change
+//
+// No dependency on any transport package.  Transports that expose their own
+// intelligence interface (e.g. IAetherIntelligence) use an adapter in the
+// corresponding bridge package (Circle.AI.Security.Aether).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Reads <see cref="NodeTrustRegistry"/> state to produce BhenguAI intelligence
-/// outputs. Wires directly to the registry's <see cref="NodeTrustRegistry.TrustScoreUpdates"/>
-/// channel for the streaming API.
+/// Reads <see cref="NodeTrustRegistry"/> state to produce transport-agnostic
+/// intelligence outputs. Wires directly to the registry's
+/// <see cref="NodeTrustRegistry.TrustScoreUpdates"/> channel for the streaming API.
 /// </summary>
-public sealed class AetherIntelligenceService : IAetherIntelligence
+public sealed class PeerIntelligenceService : IPeerIntelligence
 {
     private readonly NodeTrustRegistry _registry;
     private readonly SecurityOptions   _options;
 
-    public AetherIntelligenceService(NodeTrustRegistry registry, SecurityOptions options)
+    public PeerIntelligenceService(NodeTrustRegistry registry, SecurityOptions options)
     {
         _registry = registry;
         _options  = options;
     }
 
-    // ─── IAetherIntelligence ─────────────────────────────────────────────────
+    // ─── IPeerIntelligence ────────────────────────────────────────────────────
 
     /// <inheritdoc />
-    public Task<NetworkHealthReport> GetNetworkHealthAsync(CancellationToken ct = default)
+    public Task<PeerNetworkHealthReport> GetNetworkHealthAsync(CancellationToken ct = default)
     {
         var nodeIds = _registry.AllNodeIds.ToList();
 
         if (nodeIds.Count == 0)
         {
-            return Task.FromResult(new NetworkHealthReport(
-                OverallScore:        1.0,
-                TrustedNodeCount:    0,
-                SuspiciousNodeCount: 0,
-                Summary:             "No nodes observed.",
-                GeneratedAt:         DateTimeOffset.UtcNow));
+            return Task.FromResult(new PeerNetworkHealthReport(
+                OverallScore:       1.0,
+                TrustedPeerCount:   0,
+                SuspiciousPeerCount: 0,
+                Summary:            "No peers observed.",
+                GeneratedAt:        DateTimeOffset.UtcNow));
         }
 
-        var scores   = nodeIds.Select(id => _registry.GetTrustScore(id)).ToList();
-        var overall  = scores.Average();
-        var trusted  = scores.Count(s => s > _options.AvoidNodeThreshold);
+        var scores     = nodeIds.Select(id => _registry.GetTrustScore(id)).ToList();
+        var overall    = scores.Average();
+        var trusted    = scores.Count(s => s > _options.AvoidNodeThreshold);
         var suspicious = scores.Count(s => s <= _options.ElevateMonitoringThreshold);
 
         var summary = overall switch
         {
-            > 0.90 => "Mesh health is excellent.",
-            > 0.75 => "Mesh health is good; minor anomalies detected.",
-            > 0.50 => "Mesh health is degraded; elevated monitoring active.",
-            > 0.25 => "Mesh health is poor; routing around compromised nodes.",
-            _      => "Mesh health is critical; quarantine directives in effect.",
+            > 0.90 => "Network health is excellent.",
+            > 0.75 => "Network health is good; minor anomalies detected.",
+            > 0.50 => "Network health is degraded; elevated monitoring active.",
+            > 0.25 => "Network health is poor; routing around compromised peers.",
+            _      => "Network health is critical; quarantine directives in effect.",
         };
 
-        return Task.FromResult(new NetworkHealthReport(
+        return Task.FromResult(new PeerNetworkHealthReport(
             overall, trusted, suspicious, summary, DateTimeOffset.UtcNow));
     }
 
     /// <inheritdoc />
-    public Task<ThreatAssessment> AssessThreatAsync(
+    public Task<PeerThreatAssessment> AssessThreatAsync(
         string nodeId, CancellationToken ct = default)
     {
-        var score      = _registry.GetTrustScore(nodeId);
-        var deficit    = 1.0 - score;  // 0 = fully trusted, 1 = fully lost
+        var score   = _registry.GetTrustScore(nodeId);
+        var deficit = 1.0 - score;   // 0 = fully trusted, 1 = fully lost
 
         var indicators = ThreatDetector.DetectIndicators(
             _registry.GetRecentEvents(nodeId), _options.EventWindow);
 
         var level = score switch
         {
-            <= 0.25 => AetherThreatLevel.Critical,
-            <= 0.50 => AetherThreatLevel.High,
-            <= 0.75 => AetherThreatLevel.Medium,
-            <= 0.90 => AetherThreatLevel.Low,
-            _       => AetherThreatLevel.None,
+            <= 0.25 => PeerThreatLevel.Critical,
+            <= 0.50 => PeerThreatLevel.High,
+            <= 0.75 => PeerThreatLevel.Medium,
+            <= 0.90 => PeerThreatLevel.Low,
+            _       => PeerThreatLevel.None,
         };
 
-        // Confidence is proportional to trust deficit, boosted by each indicator
+        // Confidence is proportional to trust deficit, boosted by each indicator.
         var confidence = Math.Min(1.0, deficit + indicators.Count * 0.1);
 
-        return Task.FromResult(new ThreatAssessment(
+        return Task.FromResult(new PeerThreatAssessment(
             nodeId, confidence, level, indicators, DateTimeOffset.UtcNow));
     }
 
     /// <inheritdoc />
-    public Task<RoutingAdvice> GetRoutingAdviceAsync(
+    public Task<PeerRoutingAdvice> GetRoutingAdviceAsync(
         string destinationNodeId, CancellationToken ct = default)
     {
         var allNodes   = _registry.AllNodeIds.ToList();
@@ -103,7 +106,7 @@ public sealed class AetherIntelligenceService : IAetherIntelligence
 
         var destScore = _registry.GetTrustScore(destinationNodeId);
 
-        // Recommended path is direct only when destination is above avoid-threshold
+        // Recommended path is direct only when destination is above avoid-threshold.
         var recommended = destScore > _options.AvoidNodeThreshold
             ? (IReadOnlyList<string>)[destinationNodeId]
             : [];
@@ -116,7 +119,7 @@ public sealed class AetherIntelligenceService : IAetherIntelligence
             _      => $"Destination {destinationNodeId} is quarantined; no safe path available.",
         };
 
-        return Task.FromResult(new RoutingAdvice(
+        return Task.FromResult(new PeerRoutingAdvice(
             destinationNodeId,
             recommended,
             avoidNodes,
@@ -126,7 +129,7 @@ public sealed class AetherIntelligenceService : IAetherIntelligence
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<TrustScoreUpdate> StreamTrustScoresAsync(
+    public async IAsyncEnumerable<PeerTrustScoreUpdate> StreamTrustScoresAsync(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         await foreach (var update in _registry.TrustScoreUpdates.ReadAllAsync(ct))

@@ -11,7 +11,7 @@ namespace Circle.AI.Security;
 /// <summary>
 /// Configures thresholds, decay rates, and event retention for the
 /// AI Security Layer. Pass to <see cref="NodeTrustRegistry"/> and
-/// <see cref="AISecurityLayerService"/> via DI.
+/// <see cref="SecurityLayerService"/> via DI.
 /// </summary>
 public sealed class SecurityOptions
 {

@@ -1,44 +1,48 @@
 namespace Circle.AI.Security;
 
-using Circle.AI.Aether;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure static threat logic — no state, no DI, fully testable in isolation.
 //
 // Two responsibilities:
 //   1. ComputeDegradation: how much trust a single security event should cost.
 //   2. DetectIndicators:   which behavioural patterns are visible in a window.
+//
+// Transport-agnostic: operates on PeerSecurityEvent / PeerSecurityEventKind /
+// PeerThreatLevel — no dependency on any specific transport package.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Stateless threat analysis helpers used by <see cref="AISecurityLayerService"/>
-/// and <see cref="AetherIntelligenceService"/>.
+/// Stateless threat analysis helpers used by <see cref="SecurityLayerService"/>
+/// and <see cref="PeerIntelligenceService"/>.
 /// </summary>
 public static class ThreatDetector
 {
     // ─── Degradation weights by event kind ───────────────────────────────────
 
-    private static double BaseWeight(AetherSecurityEventKind kind) => kind switch
+    private static double BaseWeight(PeerSecurityEventKind kind) => kind switch
     {
-        AetherSecurityEventKind.NodeAuthAttempt     => 0.05,
-        AetherSecurityEventKind.RoutingAnomaly      => 0.10,
-        AetherSecurityEventKind.NodeBehaviourChange => 0.08,
-        AetherSecurityEventKind.EncryptionEvent     => 0.06,
-        AetherSecurityEventKind.IntrusionSignal     => 0.15,
-        AetherSecurityEventKind.PrivilegeAttempt    => 0.12,
-        _                                           => 0.05,
+        PeerSecurityEventKind.AuthAttempt        => 0.05,
+        PeerSecurityEventKind.RoutingAnomaly     => 0.10,
+        PeerSecurityEventKind.BehaviourChange    => 0.08,
+        PeerSecurityEventKind.EncryptionEvent    => 0.06,
+        PeerSecurityEventKind.IntrusionSignal    => 0.15,
+        PeerSecurityEventKind.PrivilegeAttempt   => 0.12,
+        PeerSecurityEventKind.ConnectionAnomaly  => 0.07,
+        PeerSecurityEventKind.DataExfiltration   => 0.14,
+        PeerSecurityEventKind.DenialOfService    => 0.13,
+        _                                        => 0.05,
     };
 
     // ─── Multipliers by threat level ─────────────────────────────────────────
 
-    private static double ThreatMultiplier(AetherThreatLevel level) => level switch
+    private static double ThreatMultiplier(PeerThreatLevel level) => level switch
     {
-        AetherThreatLevel.None     => 0.0,
-        AetherThreatLevel.Low      => 0.5,
-        AetherThreatLevel.Medium   => 1.0,
-        AetherThreatLevel.High     => 2.0,
-        AetherThreatLevel.Critical => 3.0,
-        _                          => 1.0,
+        PeerThreatLevel.None     => 0.0,
+        PeerThreatLevel.Low      => 0.5,
+        PeerThreatLevel.Medium   => 1.0,
+        PeerThreatLevel.High     => 2.0,
+        PeerThreatLevel.Critical => 3.0,
+        _                        => 1.0,
     };
 
     // ─── Public API ──────────────────────────────────────────────────────────
@@ -46,9 +50,9 @@ public static class ThreatDetector
     /// <summary>
     /// Returns the trust-score degradation amount for a security event,
     /// calculated as <c>BaseWeight(kind) × ThreatMultiplier(level)</c>.
-    /// Returns 0 when <see cref="AetherThreatLevel.None"/>.
+    /// Returns 0 when <see cref="PeerThreatLevel.None"/>.
     /// </summary>
-    public static double ComputeDegradation(AetherSecurityEvent e) =>
+    public static double ComputeDegradation(PeerSecurityEvent e) =>
         BaseWeight(e.Kind) * ThreatMultiplier(e.ThreatLevel);
 
     /// <summary>
@@ -57,25 +61,25 @@ public static class ThreatDetector
     /// Returns an empty list when no patterns are detected.
     /// </summary>
     public static IReadOnlyList<string> DetectIndicators(
-        IEnumerable<AetherSecurityEvent> recentEvents, TimeSpan window)
+        IEnumerable<PeerSecurityEvent> recentEvents, TimeSpan window)
     {
-        var cutoff  = DateTimeOffset.UtcNow - window;
+        var cutoff   = DateTimeOffset.UtcNow - window;
         var windowed = recentEvents.Where(e => e.OccurredAt >= cutoff).ToList();
 
         if (windowed.Count == 0) return [];
 
-        var indicators = new List<string>(5);
+        var indicators = new List<string>(6);
 
         // ≥ 3 auth attempts within the window → brute-force signal
-        if (windowed.Count(e => e.Kind == AetherSecurityEventKind.NodeAuthAttempt) >= 3)
+        if (windowed.Count(e => e.Kind == PeerSecurityEventKind.AuthAttempt) >= 3)
             indicators.Add("repeated-auth-attempts");
 
         // Any intrusion signal → explicit probe or exploit
-        if (windowed.Any(e => e.Kind == AetherSecurityEventKind.IntrusionSignal))
+        if (windowed.Any(e => e.Kind == PeerSecurityEventKind.IntrusionSignal))
             indicators.Add("intrusion-signal-detected");
 
         // High or Critical event → severity flag
-        if (windowed.Any(e => e.ThreatLevel is AetherThreatLevel.High or AetherThreatLevel.Critical))
+        if (windowed.Any(e => e.ThreatLevel is PeerThreatLevel.High or PeerThreatLevel.Critical))
             indicators.Add("high-severity-event");
 
         // ≥ 3 distinct event kinds → multi-vector activity
@@ -83,8 +87,12 @@ public static class ThreatDetector
             indicators.Add("multi-vector-activity");
 
         // Privilege escalation attempt
-        if (windowed.Any(e => e.Kind == AetherSecurityEventKind.PrivilegeAttempt))
+        if (windowed.Any(e => e.Kind == PeerSecurityEventKind.PrivilegeAttempt))
             indicators.Add("privilege-escalation-attempt");
+
+        // Data exfiltration signal
+        if (windowed.Any(e => e.Kind == PeerSecurityEventKind.DataExfiltration))
+            indicators.Add("data-exfiltration-signal");
 
         return indicators;
     }
