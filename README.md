@@ -1,13 +1,10 @@
-# BhenguAI — ⚠️ Deprecated as of 2.0.0
-
-> **This library has been rebranded.**
-> BhenguAI 2.0.0 is the final release under this name.
-> All active development continues at **[CircleAI](https://github.com/bhengubv/CircleAI)** under the `Circle.AI.*` namespace.
-> Migrate by replacing `Bhengu.AI.*` imports with `Circle.AI.*`.
-
----
+# BhenguAI
 
 On-device AI library for the TheGeekNetwork ecosystem. Internal codename: Butler / B!.
+
+> **NuGet note:** 2.0.0 is the last package published under the `Bhengu.AI.*` namespace.
+> New packages ship as `Circle.AI.*` from **[CircleAI](https://github.com/bhengubv/CircleAI)**.
+> This repo continues to receive updates alongside CircleAI.
 
 Runs Qwen 3 14B (Alibaba, MIT licensed) locally via llama.cpp. Designed to fit on a Xiaomi 12 Pro: under 15 GB on disk, under 4 GB RAM in use, fully offline.
 
@@ -17,7 +14,7 @@ Runs Qwen 3 14B (Alibaba, MIT licensed) locally via llama.cpp. Designed to fit o
 - Resilience: works under sanctions, blackouts, or roaming.
 - Cost: zero per-token charges.
 
-## Components (final — 12 projects)
+## Components (12 projects)
 - **Bhengu.AI.Core** — model registry, downloader (ModelScope primary, HuggingFace fallback), local cache.
 - **Bhengu.AI.Inference** — llama.cpp P/Invoke layer. Qwen chat generator.
 - **Bhengu.AI.Embeddings** — local embeddings for semantic search.
