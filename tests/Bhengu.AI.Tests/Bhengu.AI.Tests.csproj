@@ -32,5 +32,6 @@
     <ProjectReference Include="..\..\src\Bhengu.AI.Voice\Bhengu.AI.Voice.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Maui\Bhengu.AI.Maui.csproj" />
     <ProjectReference Include="..\..\src\Bhengu.AI.Skills\Bhengu.AI.Skills.csproj" />
+    <ProjectReference Include="..\..\src\Bhengu.AI.Aether\Bhengu.AI.Aether.csproj" />
   </ItemGroup>
 </Project>
