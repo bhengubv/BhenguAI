@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Circle.AI.Core\Circle.AI.Core.csproj" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+</Project>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>latest</LangVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Circle.AI.Core\Circle.AI.Core.csproj" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<!-- Native llama.cpp libs (libllama.so / libllama.dylib / llama.dll) are
+		     supplied separately at deploy time. See SETUP.md. -->
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+
+	<!-- Native library bundling — copies llama.cpp binaries for the current
+	     platform. Override $(BhenguNativeLibRoot) to point at your own dir. -->
+	<Import Project="$(MSBuildThisFileDirectory)Circle.AI.Inference.targets" />
+
+</Project>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>latest</LangVersion>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Circle.AI.Core\Circle.AI.Core.csproj" />
+		<ProjectReference Include="..\Circle.AI.Inference\Circle.AI.Inference.csproj" />
+	</ItemGroup>
+
+	<!-- Embedding backend pending: previous MiniLM/ONNX implementation removed (US-origin model).
+	     A sovereign-origin embedder (BGE-zh, Qwen-Embedding) will be wired into TextEmbedder.cs.
+	     See TODO.md for the production blocker item. -->
+
+	<PropertyGroup>
+		<!-- Disable RID-specific asset warnings -->
+		<EnableRuntimeIdentifierChecking>false</EnableRuntimeIdentifierChecking>
+
+		<!-- If not using SQLite -->
+		<PublishReadyToRun>false</PublishReadyToRun>
+		<StripSymbols>true</StripSymbols>
+	</PropertyGroup>
+</Project>
