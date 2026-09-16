@@ -6,9 +6,33 @@
     <Copyright>Copyright © 2024-2025 The Other Bhengu (PTY) Ltd</Copyright>
 
     <!-- ========== VERSIONING ========== -->
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+
+    <!-- Final release of the Bhengu.AI.* package family.
+         Superseded by CircleAI on nuget.org. -->
+    <PackageReleaseNotes>
+      FINAL RELEASE — Bhengu.AI.* is deprecated.
+
+      Bhengu.AI was the predecessor to CircleAI. Active development has moved
+      to the CircleAI package family on nuget.org:
+
+        dotnet remove package Bhengu.AI.Core
+        dotnet add package CircleAI.Core
+
+      The CircleAI.* packages are API-compatible in concept (the namespace
+      changes to CircleAI.X) and ship with the same on-device-first model
+      across 10 languages. Ongoing maintenance, security fixes, and new
+      capabilities (Personality, Knowledge, Federation, Agents.Peer,
+      InferenceBridge, Wearable.Biosignals, Personal, Orchestration,
+      Simulation) ship only on CircleAI.*.
+
+      This 1.2.0 release is provided so existing Bhengu.AI.* users get one
+      last clean build before migrating. No further versions will be cut.
+
+      See: https://github.com/bhengubv/CircleAI
+    </PackageReleaseNotes>
 
     <!-- ========== LANGUAGE ========== -->
     <Nullable>enable</Nullable>
@@ -21,7 +45,7 @@
     <PackageProjectUrl>https://github.com/bhengubv/CircleAI</PackageProjectUrl>
     <RepositoryUrl>https://github.com/bhengubv/CircleAI</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>circle-ai;on-device-ai;llm;local-ai;circle;thegeeknetwork</PackageTags>
+    <PackageTags>deprecated;legacy;migrate-to-circleai;on-device-ai;llm;local-ai;thegeeknetwork</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 
